@@ -1,0 +1,14 @@
+Handwriting fonts used to render synthetic prescription training data.
+
+All from the google/fonts repository under the SIL Open Font License 1.1:
+  Caveat (Pablo Impallari, Rodrigo Fuenzalida)
+  DancingScript (Impallari Type)
+  IndieFlower (Kimberly Geswein)
+  Kalam Regular & Bold (Indian Type Foundry)
+  PatrickHand (Patrick Wagesreiter)
+  ReenieBeanie (James Grieshaber)
+  ShadowsIntoLight (Kimberly Geswein)
+
+OFL permits bundling and derived works with attribution. The cluster also
+provides Z003 (URW chancery) from urw-base35, which ships under the AFPL/GPL
+font exception — used only as an additional rendering family.
