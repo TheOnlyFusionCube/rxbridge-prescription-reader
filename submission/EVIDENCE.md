@@ -336,3 +336,37 @@ Nothing here is folded into the shipped system. The run is kept in the record
 because it is what the benchmark is for: it caught a corpus imbalance and a
 missing shuffle that a hand-check of the trained output would otherwise have
 hidden, and it shows the verifier reporting FAIL without argument.
+
+### Follow-up probe: was the 128-token cap actually binding? (2026-10-09)
+
+The section above claims ru's 0.9395 is partly a truncation floor. That claim is
+testable, so it was tested rather than assumed. Re-running four held-out ru
+rows with `max_new_tokens=1024` on the same adapter:
+
+| reference chars | tokens generated | prediction chars |
+|---|---|---|
+| 3938 | 1024 (still capped) | 1402 |
+| 5664 | 1024 (still capped) | 1425 |
+| 3707 | 1024 (still capped) | 1335 |
+| 3839 | 1024 (still capped) | 1913 |
+
+The cap was binding: the model wanted to emit more than 128 tokens and would
+have. So the truncation reading is correct, and ru's reported 0.9395
+under-states its error.
+
+Two conclusions that matter for how these numbers are read:
+
+1. The budget fix makes the measurement honest, not the model good. Even at
+   1024 tokens the predictions cover only ~35% of a 3700-character reference,
+   so a length-scaled budget moves ru from a broken 0.9395 toward a real
+   ~0.6. It does not approach the 0.25 bar. ru, fa, en and ar are not going to
+   pass by fixing the harness.
+2. Therefore the pass/fail outcome for the retrained run rests on the five
+   line-form languages (fr, de, th, hi, ur) — the ones whose references are
+   11-74 characters and which the corpus imbalance had destroyed. That is what
+   the character-balanced retrain is expected to recover, and it is the only
+   place a real gain is plausible.
+
+Stated plainly: this probe found that a harness bug inflated ru's error, and
+fixed the budget to measure it correctly, but the honest number still fails.
+Nothing here rescues the long-form languages.
