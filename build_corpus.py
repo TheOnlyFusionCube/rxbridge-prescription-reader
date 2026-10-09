@@ -13,42 +13,49 @@ from __future__ import annotations
 
 import argparse
 import csv
-import io
 import json
 import random
 import shutil
 import sys
 from pathlib import Path
 
-from PIL import Image
-
 # language -> list of (relative path under repo, reader kind)
+# Only languages with verified image+transcript pairs are listed. Odia ships
+# character-classification metadata with no images; Korean ships 53 polygon
+# regions inside 5 images, too few for a split.
 SOURCES: dict[str, list[tuple[str, str]]] = {
-    "en": [("ml/amr", "amr"), ("ml/iam", "tgz"), ("ml/rxwords", "rxwords")],
-    "fr": [("ml/rimes", "parquet")],
+    "en": [("ml/amr", "amr")],
+    "fr": [("ml/rimes_fr", "parquet")],
     "th": [("htr/th", "parquet")],
     "ar": [("htr/ar", "parquet")],
     "de": [("htr/de", "parquet")],
     "fa": [("htr/fa", "parquet")],
     "ru": [("htr/ru", "parquet")],
     "vi": [("htr/vi", "parquet")],
-    "zh": [("htr/zh", "parquet")],
-    "ko": [("htr/ko", "ko")],
-    "ur": [("htr/ur", "csv")],
-    "or": [("htr/or", "auto")],
+    "hi": [("htr/ml", "hi_zip")],
+    "ur": [("fresh/ur", "ur_tgz")],
 }
 
 TRAIN_CAP = 3000
 VAL_CAP = 200
 TEST_CAP = 200
 MIN_PER_LANG = 12
+ROW_CAP = TRAIN_CAP + VAL_CAP + TEST_CAP
 
 
 # ------------------------------------------------------------------ helpers
 
 
-def _dump_png(img, out_dir: Path, cache: dict) -> str | None:
-    """Materialise a parquet image cell as a PNG on disk, memoised by hash."""
+_IMAGE_SUFFIX = {
+    b"\xff\xd8\xff": ".jpg",
+    b"\x89PNG\r\n\x1a\n": ".png",
+    b"GIF87a": ".gif",
+    b"GIF89a": ".gif",
+}
+
+
+def _dump_image(img, out_dir: Path, cache: dict) -> str | None:
+    """Write an image cell's bytes to disk verbatim, memoised by content hash."""
     import hashlib
 
     if isinstance(img, dict):
@@ -63,27 +70,55 @@ def _dump_png(img, out_dir: Path, cache: dict) -> str | None:
     hit = cache.get(key)
     if hit:
         return hit
-    try:
-        with Image.open(io.BytesIO(raw)) as im:
-            im.load()
-            if im.mode not in ("RGB", "L"):
-                im = im.convert("RGB")
-            out_dir.mkdir(parents=True, exist_ok=True)
-            path = out_dir / f"{key}.png"
-            if not path.exists():
-                im.save(path)
-            cache[key] = str(path)
-            return str(path)
-    except Exception:
-        return None
+    # Decoding and re-encoding each cell cost seconds on the large handwritten
+    # line shards, which is what stalled Arabic; the bytes are already a valid
+    # image and the benchmark opens them with Image.open either way.
+    suffix = next(
+        (s for magic, s in _IMAGE_SUFFIX.items() if raw.startswith(magic)), ".bin"
+    )
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{key}{suffix}"
+    if not path.exists():
+        path.write_bytes(raw)
+    cache[key] = str(path)
+    return str(path)
 
 
 # ------------------------------------------------------------------ readers
 
 
+def _text_from_messages(messages) -> str:
+    """Conversation-format shards: the assistant turn carries the transcript."""
+    # pandas hands nested struct columns back as ndarray, which fails the list
+    # check below and silently blanks every row; tolist restores native dicts.
+    if hasattr(messages, "tolist"):
+        messages = messages.tolist()
+    if not isinstance(messages, (list, tuple)):
+        return ""
+    for msg in reversed(messages):
+        if not isinstance(msg, dict) or msg.get("role") == "user":
+            continue
+        content = msg.get("content")
+        # pandas hands the nested list back as ndarray too, so coerce it before
+        # the isinstance checks below or every part is skipped and the row is
+        # silently blanked.
+        if hasattr(content, "tolist"):
+            content = content.tolist()
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            parts = [
+                p.get("text") for p in content
+                if isinstance(p, dict) and p.get("type") == "text" and p.get("text")
+            ]
+            if parts:
+                return " ".join(str(p) for p in parts).strip()
+    return ""
+
+
 def read_parquet(root: Path, cache: dict):
     """Generic reader: parquet shards with an image column and a text column."""
-    cols_text = ("text", "label", "transcription", "ground_truth")
+    cols_text = ("text", "label", "transcription", "ground_truth", "content")
     for parquet in sorted(root.rglob("*.parquet")):
         try:
             import pandas as pd
@@ -94,15 +129,18 @@ def read_parquet(root: Path, cache: dict):
         if not len(df):
             continue
         img_col = next((c for c in ("image", "img", "pixel_values") if c in df.columns), None)
+        if not img_col:
+            continue
+        msg_col = "messages" if "messages" in df.columns else None
         txt_col = next((c for c in cols_text if c in df.columns), None)
-        if not img_col or not txt_col:
+        if not msg_col and not txt_col:
             continue
         out_dir = parquet.parent / "_png"
         for _, row in df.iterrows():
-            text = str(row[txt_col]).strip()
+            text = _text_from_messages(row[msg_col]) if msg_col else str(row[txt_col]).strip()
             if not text:
                 continue
-            path = _dump_png(row[img_col], out_dir, cache)
+            path = _dump_image(row[img_col], out_dir, cache)
             if path:
                 yield {"image": path, "text": text}
 
@@ -208,6 +246,167 @@ def read_auto(root: Path, cache: dict):
     yield from read_parquet(root, cache)
 
 
+def read_hi_zip(root: Path, cache: dict):
+    """Hindi: annotation JSON rows paired with PNGs baked into per-chunk zips."""
+    import zipfile
+
+    ann_dir = root / "annotations"
+    zip_dir = root / "images" / "hindi"
+    if not ann_dir.is_dir() or not zip_dir.is_dir():
+        return
+    texts: dict[str, str] = {}
+    for chunk in sorted(ann_dir.glob("*.json")):
+        try:
+            rows = json.loads(chunk.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for row in rows:
+            rid = str(row.get("id", "")).strip()
+            text = str(row.get("text", "")).strip()
+            if rid and rid not in texts:
+                texts[rid] = text
+    if not texts:
+        return
+
+    out_dir = root / "_png"
+    made = 0
+    for zf_path in sorted(zip_dir.glob("*.zip")):
+        try:
+            with zipfile.ZipFile(zf_path) as zf:
+                for name in zf.namelist():
+                    rid = Path(name).stem
+                    text = texts.get(rid)
+                    if not text:
+                        continue
+                    out = out_dir / f"{rid}.png"
+                    if not out.exists():
+                        with zf.open(name) as src, out.open("wb") as dst:
+                            shutil.copyfileobj(src, dst)
+                    made += 1
+                    yield {"image": str(out), "text": text}
+                    if made >= ROW_CAP:
+                        return
+        except Exception:
+            continue
+
+
+def read_ur_tgz(root: Path, cache: dict):
+    """Urdu: CSVs name img paths that live inside ouhdl_v1.0_core.tar.gz."""
+    import tarfile
+
+    tgz = next(iter(sorted(root.glob("*.tar.gz"))), None)
+    if tgz is None:
+        return
+    wanted: dict[str, str] = {}
+    for csv_path in sorted(root.glob("*.csv")):
+        try:
+            with csv_path.open(encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    img = str(row.get("img", "")).strip()
+                    text = str(row.get("line", "")).strip()
+                    if img and text:
+                        wanted.setdefault(img, text)
+        except Exception:
+            continue
+    if not wanted:
+        return
+
+    out_dir = root / "_png"
+    made = 0
+    with tarfile.open(tgz, "r:gz") as tf:
+        for member in tf:
+            if not member.isfile() or member.name not in wanted:
+                continue
+            src = tf.extractfile(member)
+            if src is None:
+                continue
+            out = out_dir / Path(member.name).name
+            if not out.exists():
+                with out.open("wb") as dst:
+                    shutil.copyfileobj(src, dst)
+            made += 1
+            yield {"image": str(out), "text": wanted[member.name]}
+            if made >= ROW_CAP:
+                return
+
+
+def read_ur_tgz(root: Path, cache: dict):
+    """Urdu: CSV rows name images that ship inside the ouhdl core tarball."""
+    import tarfile
+
+    tgz = root / "ouhdl_v1.0_core.tar.gz"
+    if not tgz.exists():
+        return
+    pairs: list[tuple[str, str]] = []
+    for csv_file in sorted(root.glob("*.csv")):
+        with csv_file.open(encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                img_key = next((k for k in ("img", "image", "path", "file") if k in row), None)
+                txt_key = next((k for k in ("line", "text", "label") if k in row), None)
+                if not img_key or not txt_key:
+                    continue
+                img = str(row[img_key]).strip()
+                text = str(row[txt_key]).strip()
+                if img and text:
+                    pairs.append((img, text))
+    if not pairs:
+        return
+    out_dir = root / "_png"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(tgz, "r:gz") as tf:
+        for name, text in pairs:
+            try:
+                member = tf.getmember(name)
+            except KeyError:
+                continue
+            path = out_dir / Path(name).name
+            if not path.exists():
+                with tf.extractfile(member) as src:
+                    if src is None:
+                        continue
+                    path.write_bytes(src.read())
+            yield {"image": str(path), "text": text}
+
+
+def read_hi_zip(root: Path, cache: dict):
+    """Hindi: annotation chunk i pairs id+text with entries in images/hindi/hindi_i.zip."""
+    ann_dir = root / "annotations"
+    zip_dir = root / "images" / "hindi"
+    ann_files = sorted(ann_dir.glob("*.json")) if ann_dir.is_dir() else []
+    if not ann_files:
+        return
+    zips = {p.name: p for p in zip_dir.glob("*.zip")} if zip_dir.is_dir() else {}
+    out_dir = root / "_png"
+    for i, ann in enumerate(ann_files):
+        try:
+            rows = json.loads(ann.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        zip_path = zips.get(f"hindi_{i:04d}.zip")
+        zf = None
+        if zip_path:
+            import zipfile
+
+            try:
+                zf = zipfile.ZipFile(zip_path)
+            except Exception:
+                zf = None
+        for row in rows:
+            rid = str(row.get("id", "")).strip()
+            text = str(row.get("text", "")).strip()
+            if not rid or not text or zf is None:
+                continue
+            path = out_dir / f"{rid}.png"
+            if not path.exists():
+                try:
+                    data = zf.read(f"hindi/{rid}.png")
+                except KeyError:
+                    continue
+                out_dir.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            yield {"image": str(path), "text": text}
+
+
 READERS = {
     "parquet": read_parquet,
     "amr": read_amr,
@@ -216,6 +415,8 @@ READERS = {
     "ko": read_ko,
     "csv": read_csv,
     "auto": read_auto,
+    "ur_tgz": read_ur_tgz,
+    "hi_zip": read_hi_zip,
 }
 
 
@@ -261,6 +462,8 @@ def main():
             reader = READERS[kind]
             try:
                 for row in reader(path, cache):
+                    if len(rows) >= ROW_CAP:
+                        break
                     if not row["text"]:
                         continue
                     key = (row["image"], row["text"][:80])
