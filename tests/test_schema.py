@@ -123,8 +123,8 @@ def test_overall_confidence_out_of_range_raises(value):
         make_ok(overall_confidence=value)
 
 
-def test_overall_confidence_none_is_allowed():
-    assert make_ok(overall_confidence=None).overall_confidence is None
+def test_overall_confidence_none_is_allowed_when_unreadable():
+    assert PrescriptionSchedule().overall_confidence is None
 
 
 # --------------------------------------------------------------------------- #
@@ -333,8 +333,9 @@ def test_json_schema_file_is_valid_and_matches_model():
     assert SCHEMA_PATH.exists(), f"missing exported schema: {SCHEMA_PATH}"
     data = json.loads(SCHEMA_PATH.read_text())
     assert data == PrescriptionSchedule.model_json_schema()
-    assert "PrescriptionSchedule" in data["properties"]
+    assert data["title"] == "PrescriptionSchedule"
     assert "DrugEntry" in data["$defs"]
+    assert "status" in data["properties"]
 
 
 # --------------------------------------------------------------------------- #

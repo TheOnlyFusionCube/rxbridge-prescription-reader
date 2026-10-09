@@ -1,0 +1,160 @@
+{
+  "$defs": {
+    "DrugEntry": {
+      "additionalProperties": false,
+      "description": "One parsed medication line.",
+      "properties": {
+        "drug": {
+          "title": "Drug",
+          "type": "string"
+        },
+        "dose": {
+          "title": "Dose",
+          "type": "string"
+        },
+        "dose_unit": {
+          "title": "Dose Unit",
+          "type": "string"
+        },
+        "route": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Route"
+        },
+        "frequency": {
+          "title": "Frequency",
+          "type": "string"
+        },
+        "times_of_day": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Times Of Day",
+          "type": "array"
+        },
+        "duration_days": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Days"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "source_text": {
+          "title": "Source Text",
+          "type": "string"
+        },
+        "span": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Span"
+        }
+      },
+      "required": [
+        "drug",
+        "dose",
+        "dose_unit",
+        "frequency",
+        "confidence",
+        "source_text"
+      ],
+      "title": "DrugEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Top-level extraction result for a single prescription photo.",
+  "properties": {
+    "status": {
+      "default": "unreadable",
+      "enum": [
+        "ok",
+        "unreadable"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "drugs": {
+      "items": {
+        "$ref": "#/$defs/DrugEntry"
+      },
+      "title": "Drugs",
+      "type": "array"
+    },
+    "language": {
+      "default": "en",
+      "title": "Language",
+      "type": "string"
+    },
+    "target_language": {
+      "default": "en",
+      "title": "Target Language",
+      "type": "string"
+    },
+    "explanation": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Explanation"
+    },
+    "overall_confidence": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Overall Confidence"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "title": "PrescriptionSchedule",
+  "type": "object"
+}
