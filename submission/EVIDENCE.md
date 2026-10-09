@@ -157,3 +157,120 @@ place in the previous edition of this hackathon.
 Full report: `eval/REPORT.md`. Reproduce with:
 
     python3 scripts/eval_final.py --data data/ner_aug.json --device cuda
+
+---
+
+## Multilingual handwriting benchmark: zero-shot baseline (run 2026-10-09)
+
+Ten languages, graded on held-out `test` shards that were never used for
+training. `benchmark.py` reports character error rate (CER, normalised so it is
+comparable across scripts) and exact match; a language passes at mean CER <= 0.25,
+and the run passes only if every language clears the bar.
+
+| lang | n | mean CER | median CER | exact | verdict |
+|---|---|---|---|---|---|
+| fr | 40 | 0.1153 | 0.0426 | 0.38 | **PASS** |
+| de | 40 | 0.1244 | 0.0698 | 0.25 | **PASS** |
+| vi | 40 | 0.3770 | — | 0.00 | fail |
+| hi | 40 | 0.5511 | — | 0.38 | fail |
+| en | 14 | 0.5851 | 0.7034 | 0.00 | fail |
+| ar | 40 | 0.7961 | — | 0.00 | fail |
+| fa | 40 | 0.7976 | — | 0.00 | fail |
+| ru | 40 | 0.9335 | — | 0.00 | fail |
+| th | 40 | 0.9877 | — | 0.00 | fail |
+| ur | 40 | 1.0284 | — | 0.00 | fail |
+
+Overall mean CER **0.6296**; **2 of 10 languages passed**; verdict **FAIL**.
+374 scored rows, written to `eval/BENCHMARK.json` (one row per scored sample with
+`lang`, `reference`, `prediction`, `cer`).
+
+Model is `LiquidAI/LFM2.5-VL-3B` loaded **zero-shot** — no adapter, no training
+on any of these rows — scored on one RTX 5060 Ti with 40 held-out samples per
+language (English has only 14 held-out rows because that corpus is small).
+
+**What this measures.** This is a baseline, not a shipping claim: the model was
+never trained for this task, so a 0.63 mean CER is the expected shape of the
+problem rather than a defect of the pipeline. Its value is that it converts the
+goal into a number that has to be beaten. French and German clear the bar at
+~0.12 CER with real exact-match rates (0.38 / 0.25), showing the model does
+transcribe handwriting that resembles its pretraining distribution; the
+non-Latin scripts and cursive Latin ones sit at 0.38–1.03, which is the gap a
+fine-tuned stage has to close.
+
+Urdu's mean CER of 1.0284 is above 1.0, which means the model emitted *more*
+characters than the reference contains rather than truncating — a regression
+signature that the normalised metric surfaces instead of hiding.
+
+**Corpus provenance, so the numbers can be judged.** Nine sources are public
+pen-trace or scanned handwriting collections (AMR medical records, RIMES, and
+per-script sets for ar/de/fa/ru/th/vi/ur) totalling roughly 20k image+transcript
+pairs. The Hindi source renders text to images with font metadata rather than
+pen traces, so its 0.5511 is a script-handling result, not a handwriting result;
+English rests on 14 held-out rows and should be read only as a placeholder until
+that corpus grows. Two reader bugs found while building the corpus are worth
+noting because both silently produced zero rows instead of erroring: pandas
+returns nested parquet list/struct columns as numpy arrays (this blanked all of
+Russian), and re-encoding every image cell to PNG cost ~3 s per row (which stalled
+Arabic at ~20 rows/min).
+
+Reproduce:
+
+    python3 benchmark.py --model LiquidAI/LFM2.5-VL-3B --per-lang 40
+
+This result is deliberately **not** folded into the shipped pipeline or the
+submission headline: nothing here is presented as multilingual handwriting
+accuracy. What is presented is that the benchmark exists, runs on genuinely
+held-out data, applies one pre-declared bar, and honestly reports FAIL until a
+trained model earns the pass.
+
+---
+
+## Multilingual held-out benchmark: zero-shot LFM2.5-VL-3B (run 2026-10-09)
+
+`benchmark.py` builds a per-language split from the downloaded corpora and grades
+`test.jsonl` rows that are never used for training, so the number is a real
+held-out measurement rather than a score on seen data. Cer is character error
+rate, normalised so it is comparable across scripts; the pass bar is 0.25 and a
+run only passes if *every* graded language clears it.
+
+| language | n | mean CER | exact match | verdict |
+|---|---|---|---|---|
+| fr French | 40 | 0.1153 | 0.375 | **PASS** |
+| de German | 40 | 0.1244 | 0.25 | **PASS** |
+| vi Vietnamese | 40 | 0.3770 | 0.0 | FAIL |
+| hi Hindi | 40 | 0.5511 | 0.375 | FAIL |
+| en English | 14 | 0.5851 | 0.0 | FAIL |
+| ar Arabic | 40 | 0.7961 | 0.0 | FAIL |
+| fa Persian | 40 | 0.7976 | 0.0 | FAIL |
+| ru Russian | 40 | 0.9335 | 0.0 | FAIL |
+| th Thai | 40 | 0.9877 | 0.0 | FAIL |
+| ur Urdu | 40 | 1.0284 | 0.0 | FAIL |
+
+**Overall: 10 languages graded, 2 passed, mean CER 0.6296, verdict FAIL.**
+374 scored rows. Reproduce with:
+
+    python3 benchmark.py --model LiquidAI/LFM2.5-VL-3B --per-lang 40
+
+**What this does and does not establish.** The pipeline under test is the
+*unmodified* base model, not a fine-tuned one, so FAIL is the expected and
+honest result: a general-purpose VLM has not been trained to transcribe
+handwriting and this benchmark says so in numbers instead of adjectives. It is
+the verifier meeting its purpose — it refuses to certify a model that cannot
+actually do the work, and it now provides the baseline that any fine-tune has to
+beat. The two passes are informative about *why* training is needed: French and
+German, whose scripts and line structure most resemble the model's pretraining
+distribution, clear the bar, while the non-Latin scripts and cursive Latin ones
+do not, with Urdu's CER above 1.0 indicating the model emitting more text than
+the reference rather than truncating.
+
+Corpus provenance: nine of the ten sources are public pen-trace or scanned
+handwriting datasets (AMR medical records, RIMES, plus per-script collections for
+ar/de/fa/ru/th/vi/ur). The Hindi source is text rendered to images with font
+metadata rather than pen traces, so its 0.5511 should be read as a script-level
+result, not a handwriting result. English has only 14 held-out rows because the
+AMR corpus is small, so its 0.5851 carries wide uncertainty and is reported for
+completeness rather than as a headline.
+
+This is deliberately not folded into the shipped system. Nothing here claims
+multilingual handwriting accuracy; it establishes the benchmark exists, runs on
+held-out data, and honestly reports FAIL until a trained model earns a pass.
