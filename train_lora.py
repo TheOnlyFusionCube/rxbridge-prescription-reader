@@ -296,23 +296,45 @@ def main() -> int:
     accum_left = args.accum
     micro = 0
 
+    failures = 0
+    abort: RuntimeError | None = None
     try:
         while len(losses) < args.steps * args.accum:
             row = rows[micro % len(rows)]
             micro += 1
             batch = collate(processor, row)
             if batch is None:
+                failures += 1
+                if failures >= 100:
+                    abort = RuntimeError(f"{failures} consecutive unusable samples")
+                    break
                 continue
             batch = to_device(batch, args.device)
-            out = model(**batch)
-            loss = out.loss
-            if not torch.isfinite(loss):
+            # Catch only OutOfMemoryError, and only around the memory-hungry
+            # calls: the first run died inside backward() on a transient spike.
+            # Catching RuntimeError here instead would swallow genuine shape and
+            # remote-code bugs and turn a broken run into a silent no-op, which
+            # is the failure mode smoke_grads.py exists to catch.
+            try:
+                out = model(**batch)
+                (out.loss / args.accum).backward()
+            except torch.OutOfMemoryError:
+                torch.cuda.empty_cache()
+                print("  OOM on this sample; skipping", file=sys.stderr)
+                opt.zero_grad()
+                accum_left = args.accum
+                failures += 1
+                if failures >= 50:
+                    abort = RuntimeError(f"{failures} consecutive OOM skips")
+                    break
+                continue
+            failures = 0
+            if not torch.isfinite(out.loss):
                 print("non-finite loss, skipping", file=sys.stderr)
                 opt.zero_grad()
                 accum_left = args.accum
                 continue
-            (loss / args.accum).backward()
-            losses.append(float(loss.detach().cpu()))
+            losses.append(float(out.loss.detach().cpu()))
             accum_left -= 1
             if accum_left:
                 continue
@@ -342,6 +364,8 @@ def main() -> int:
 
     save_adapter()
     print(f"saved adapter to {out_dir}", flush=True)
+    if abort is not None:
+        raise abort
 
     if args.eval_samples:
         print("\n--- inline eval on val rows (same metric as benchmark.py) ---",
