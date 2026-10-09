@@ -103,9 +103,18 @@ and duration.
 5. **Per-line confidence, shown to the patient.** "What we read from the photo"
    lists every detected line with a certainty percentage, so a low-confidence
    reading is visible rather than hidden.
-6. **Bilingual extraction.** Drug names and directions are recognised in English
+6. **Per-field attribution — which tokens produced each value.** Alongside the
+   schedule, `POST /extract` returns a `fields` array naming, for every drug /
+   dose / frequency / duration, the exact source tokens that produced it, the
+   mean confidence of those tokens, and which field came out weakest. A
+   pharmacist reviewing the output sees *why* each value was read, not just a
+   number — so a borderline reading can be checked against the photo instead of
+   trusted blindly. `src/explain.py` is a read-only layer over the same BIO
+   spans the contract already groups, so it cannot silently change what is
+   extracted.
+7. **Bilingual extraction.** Drug names and directions are recognised in English
    and Spanish prescriptions, and the spoken output follows the patient's chosen
-    language rather than the document's.
+   language rather than the document's.
 
 ## Follow-up on handwritten input (measured, not integrated)
 
@@ -141,10 +150,12 @@ first-place entry relied on. Full report in `eval/REPORT.md`; reproduce with
 
 - **docTR** — text detection and recognition of the prescription image
 - **PyTorch / transformers** — DistilBERT token classification, trained by us
-- **FastAPI** — extraction service, TDD with 12 API tests
+- **FastAPI** — extraction service, TDD with 12 API tests; per-field
+  attribution (`src/explain.py`) returns the source tokens, mean confidence and
+  weakest field for every extracted value
 - **Next.js 15 / React 19 / TypeScript** — PWA frontend
 - **Pydantic v2** — validated contract with exported JSON Schema, 69 tests
-- **pytest** — 81 tests total
+- **pytest** — 96 tests total (69 contract, 12 API, 13 attribution, 2 more API)
 - **Playwright** — browser-level end-to-end test and demo recording
 - **4× RTX 5060 Ti (64 GB VRAM)** — model training and inference
 - **cloudflared** — public tunnel for the deployed backend

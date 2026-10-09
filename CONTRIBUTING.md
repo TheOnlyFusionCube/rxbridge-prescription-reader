@@ -7,7 +7,7 @@ virtualenv, which pins the versions that load the docTR and DistilBERT
 checkpoints:
 
 ```bash
-.venv/bin/python -m pytest tests/ -q      # 81 tests
+.venv/bin/python -m pytest tests/ -q      # 96 tests
 .venv/bin/python -m uvicorn app.main:app --port 8000
 ```
 
@@ -41,6 +41,6 @@ Leave `NEXT_PUBLIC_API_BASE` unset to run against the bundled sample schedule
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest tests/ -q          # contract + API
+.venv/bin/python -m pytest tests/ -q          # contract + API + attribution
 cd web && npx playwright test                 # browser end-to-end
 ```
