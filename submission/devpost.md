@@ -107,6 +107,29 @@ and duration.
    and Spanish prescriptions, and the spoken output follows the patient's chosen
    language rather than the document's.
 
+## Follow-up on handwritten input (measured, not integrated)
+
+Zero-shot `LiquidAI/LFM2.5-VL-3B` (6.5 GB bf16, one RTX 5060 Ti) was tested on the
+same visually-verified real photographs. It read the blue-ink form exactly
+`Clotrimazol (500mg)`, confirmed against the pixels by eye, where docTR produced
+`Mletzina 20` and the synthetic-trained TrOCR scored CER 0.9486. It also
+hallucinated on a red-ink form and misread a dose on a third, so it is not
+reliable enough to ship and is deliberately excluded from the pipeline. It is the
+strongest candidate for a fine-tuned handwriting stage, and it fits the hardware
+with roughly 9 GB of headroom.
+
+
+## Follow-up on handwritten input (measured, not integrated)
+
+Zero-shot `LiquidAI/LFM2.5-VL-3B` (6.5 GB bf16 on one RTX 5060 Ti) was tested on
+the same visually-verified real photographs. It read the blue-ink form exactly
+`Clotrimazol (500mg)`, confirmed against the pixels by eye, where docTR produced
+`Mletzina 20` and the synthetic-trained TrOCR scored CER 0.9486. It also
+hallucinated on a red-ink form and misread a dose on a third, so it is not
+reliable enough to ship and is deliberately excluded from the pipeline. It is the
+strongest candidate for a fine-tuned handwriting stage, and it fits the hardware
+with roughly 9 GB of headroom.
+
 ## Technologies Used
 
 - **docTR** — text detection and recognition of the prescription image

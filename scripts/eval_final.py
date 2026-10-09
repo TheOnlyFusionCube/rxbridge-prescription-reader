@@ -135,18 +135,6 @@ def train_and_eval(train_rows, val_rows, epochs, batch, device):
     return f1_score(golds, preds)
 
 
-def collate_val(items):
-    import torch
-
-    ids = torch.nn.utils.rnn.pad_sequence(
-        [x[0] for x in items], batch_first=True, padding_value=0
-    )
-    labels = torch.nn.utils.rnn.pad_sequence(
-        [x[1] for x in items], batch_first=True, padding_value=-100
-    )
-    return {"input_ids": ids, "attention_mask": (ids != 0).long(), "labels": labels}
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", default="data/ner_aug.json")
