@@ -159,6 +159,9 @@ class PrescriptionSchedule(BaseModel):
             if not drug_text:
                 continue
             dose, dose_unit = _split_dose(_join(group["DOSE"]))
+            explicit_unit = _join(group["UNIT"]).strip().lower()
+            if explicit_unit and not dose_unit:
+                dose_unit = explicit_unit
             drugs.append(
                 DrugEntry(
                     drug=drug_text,
@@ -203,17 +206,22 @@ def _join(tokens: list[dict]) -> str:
     return " ".join(str(_field(token, "token", "text", default="")) for token in tokens).strip()
 
 
+_UNIT_WORDS = {"mg", "mcg", "g", "ml", "ui", "iu", "l", "meq", "units", "unit", "mgkg"}
+_DOSE_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([A-Za-z]{1,5})?\s*$")
+
+
 def _split_dose(text: str) -> tuple[str, str]:
     text = text.strip()
     if not text:
         return "", ""
     match = _DOSE_RE.match(text)
     if match:
-        return match.group(1), match.group(2).strip()
-    parts = text.split(None, 1)
-    if len(parts) == 2:
-        return parts[0], parts[1]
-    return text, ""
+        unit = (match.group(2) or "").lower()
+        return match.group(1), unit if unit in _UNIT_WORDS else ""
+    head, _, rest = text.partition(" ")
+    if rest and rest.lower().strip(".,;") in _UNIT_WORDS:
+        return head, rest.lower().strip(".,;")
+    return head, ""
 
 
 def _parse_duration(text: str) -> int | None:
