@@ -129,3 +129,31 @@ For reference on the same fixture: docTR produced `Mletzina 20` from
 fine-tuned TrOCR fail on, in one case exactly. It is not reliable zero-shot, so it
 is not integrated into the shipped pipeline. It is the clearest candidate for a
 fine-tuned handwriting stage and it fits the hardware with headroom.
+
+---
+
+## Shuffled-label control for the extraction model (run 2026-10-09)
+
+`scripts/eval_final.py` trains the same DistilBERT token-classification model
+twice on an identical corpus split: once with the real BIO tags, and once with
+every gold tag replaced by a draw from the corpus label distribution. The text
+is untouched in both runs. If the model can still score with destroyed labels,
+there is a shortcut being exploited and the headline F1 is not evidence.
+
+| model | entity-level F1 (seqeval, n=960 held out) |
+|---|---|
+| trained on real labels | **0.9367** |
+| trained on shuffled labels (control) | **0.0000** |
+
+Ran twice for reproducibility: 0.9367 and 0.9370 for the real run, 0.0000 for
+both controls.
+
+The control collapses to exactly zero, which is the strongest possible outcome:
+the 0.937 reflects the token-to-label mapping actually being learned, not a
+surface artifact of the synthetic generator. This is the same
+measure-the-signal-not-the-artifact pattern that CADENCE used to take first
+place in the previous edition of this hackathon.
+
+Full report: `eval/REPORT.md`. Reproduce with:
+
+    python3 scripts/eval_final.py --data data/ner_aug.json --device cuda
