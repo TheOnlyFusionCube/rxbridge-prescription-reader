@@ -1,0 +1,242 @@
+:root {
+  --ink: #10161d;
+  --ink-soft: #46525f;
+  --paper: #ffffff;
+  --rule: #ccd4dd;
+  --accent: #0b3d62;
+  --accent-soft: #e8f1f9;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #f6f7f9;
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px 16px 64px;
+}
+
+.app-head { margin-bottom: 24px; }
+
+.app-head h1 {
+  margin: 0 0 6px;
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+}
+
+.tagline {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--ink-soft);
+}
+
+.panel {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.lang {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+select, .file-input {
+  font: inherit;
+  min-height: 48px;
+  border: 2px solid var(--rule);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+}
+
+select { padding: 10px 12px; }
+
+.file-input {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  border-style: dashed;
+}
+
+.btn {
+  min-height: 56px;
+  min-width: 56px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 24px;
+}
+
+.btn-primary {
+  width: 100%;
+  margin-top: 16px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:disabled { background: #94a5b5; cursor: not-allowed; }
+
+.btn-speak {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.preview img {
+  width: 100%;
+  border-radius: 10px;
+  margin-top: 16px;
+  border: 1px solid var(--rule);
+}
+
+.alert {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #fdeeee;
+  border: 2px solid #e9a9a9;
+  color: #7d1d1d;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.result .alert { margin-top: 0; margin-bottom: 16px; }
+
+.day-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.grid-head, .grid-row {
+  display: grid;
+  grid-template-columns: 1fr repeat(4, 1fr);
+  gap: 6px;
+  align-items: stretch;
+}
+
+.grid-head > span {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.grid-corner { text-align: left; }
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 72px;
+  padding: 8px 4px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  border: 1px solid #cfe0ef;
+}
+
+.cell-empty { background: #f1f3f5; border-color: var(--rule); }
+
+.cell-label { font-size: 0.75rem; color: var(--ink-soft); }
+
+.cell-none { font-size: 1.1rem; color: #9aa5b1; }
+
+.pill-count { display: flex; align-items: center; gap: 8px; }
+
+.pill-glyph {
+  width: 20px; height: 12px;
+  border-radius: 6px;
+  background: var(--accent);
+}
+
+.pill-num { font-size: 1.5rem; font-weight: 800; }
+
+.grid-drug {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-right: 6px;
+}
+
+.drug-name { font-size: 1.1rem; font-weight: 700; }
+
+.drug-dose { font-size: 0.95rem; color: var(--ink-soft); }
+
+.grid-empty { font-size: 1.1rem; color: var(--ink-soft); }
+
+.speak-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.speak-state { font-size: 0.95rem; color: var(--ink-soft); }
+
+.what-we-read { margin-top: 20px; }
+
+.what-we-read summary {
+  font-weight: 650;
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.what-we-read ul { margin: 10px 0 0; padding: 0; list-style: none; }
+
+.what-we-read li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #eceff2;
+  font-size: 0.98rem;
+}
+
+.what-we-read em {
+  font-style: normal;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.app-foot {
+  margin-top: 28px;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+}
+
+:focus-visible {
+  outline: 3px solid #f4a300;
+  outline-offset: 2px;
+}
+
+@media (max-width: 560px) {
+  .grid-head, .grid-row { grid-template-columns: 1fr repeat(4, 1fr); gap: 4px; }
+  .pill-num { font-size: 1.25rem; }
+  .drug-name { font-size: 1rem; }
+}
