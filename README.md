@@ -20,11 +20,19 @@ is ever written to disk. DocTR reads printed scaffolding (form titles, dates,
 numerals) at ~0.99 confidence and fails on cursive handwriting; the slot tagger
 recovers structure from the text that survives.
 
+Every field the API returns is attributed: `src/explain.py` reports which source
+tokens produced it, the mean token confidence, and which field came out weakest.
+A pharmacist sees not just what was read but how certain it was.
+`docs/architecture.md` covers the seams between stages and what each is trusted
+to do.
+
 ## Status
 
-- `tests/` — 81 tests (69 contract + 12 API). The API tests import docTR, so
-  they run under `.venv`, not the system Python. See `CONTRIBUTING.md`.
+- `tests/` — 96 tests (69 contract, 12 API, 13 attribution, 2 API attribution).
+  The API tests import docTR, so they run under `.venv`, not the system Python.
+  See `CONTRIBUTING.md`.
 - `web/` — Next.js PWA, builds clean, 105-108 kB first-load JS.
+- `eval/` — held-out score for the slot tagger plus a shuffled-label control.
 - `submission/` — Devpost draft, screenshots, and the demo video.
 
 ## Measured results
