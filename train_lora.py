@@ -176,7 +176,7 @@ def to_device(batch: dict, device: str) -> dict:
     return out
 
 
-def predict(model, processor, image_path: str) -> str:
+def predict(model, processor, image_path: str, device: str) -> str:
     """Same call sequence as benchmark.py, so train-time scoring is comparable."""
     image = Image.open(image_path).convert("RGB")
     messages = [{
@@ -189,7 +189,11 @@ def predict(model, processor, image_path: str) -> str:
     prompt = processor.apply_chat_template(
         messages, add_generation_prompt=True, tokenize=False
     )
-    enc = processor(text=prompt, images=[image], return_tensors="pt")
+    # benchmark.py moves the batch to the device; omitting it here makes the
+    # first eval sample fail with 'mat1 is on cpu', and every sample after it.
+    enc = to_device(
+        processor(text=prompt, images=[image], return_tensors="pt"), device
+    )
     with torch.no_grad():
         out = model.generate(**enc, max_new_tokens=96, do_sample=False)
     return processor.batch_decode(
@@ -386,7 +390,7 @@ def main() -> int:
             cers: list[float] = []
             for item in sample:
                 try:
-                    hyp = predict(model, processor, item["image"])
+                    hyp = predict(model, processor, item["image"], args.device)
                 except Exception as exc:
                     print(f"    predict failed: {exc}", file=sys.stderr)
                     continue
