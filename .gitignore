@@ -2,9 +2,10 @@ __pycache__/
 *.pyc
 .env
 .env.*
-models/rxner/*.safetensors
+.DS_Store
+models/rxner2/*.safetensors
+models/rxner2/*.bin
 node_modules/
 .next/
 dist/
 *.log
-.DS_Store

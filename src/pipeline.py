@@ -108,14 +108,27 @@ class LexiconTagger(SlotTagger):
     UNITS = {"mg", "mcg", "g", "ml", "ui", "iu", "l"}
     FREQS = {"bid", "tid", "qid", "qd", "q8h", "q12h", "q6h", "prn", "od", "os", "ou"}
     ROUTES = {"oral", "sublingual", "topical", "iv", "im", "nasal", "rectal"}
-
+    FREQ_PHRASES = (
+        "once daily", "once a day", "twice daily", "twice a day",
+        "two times a day", "three times daily", "three times a day",
+        "four times daily", "four times a day", "every 8 hours",
+        "every 12 hours", "every 6 hours", "as needed", "at bedtime",
+        "in the morning", "before meals", "after meals",
+    )
     DURATION_HINTS = {"x", "for", "por", "durante", "during", "over"}
 
     def tag(self, text: str) -> list[tuple[str, float]]:
-        out = []
-        prev_low = ""
-        for w in text.split():
-            low = w.lower().strip(".,;:")
+        words = text.split()
+        out: list[tuple[str, float]] = []
+        i = 0
+        while i < len(words):
+            span = self._freq_span(words, i)
+            if span:
+                out.extend([("B-FREQ", 0.75)] * span)
+                i += span
+                continue
+            low = words[i].lower().strip(".,;:")
+            prev_low = words[i - 1].lower().strip(".,;:") if i > 0 else ""
             if low in self.DRUGS:
                 out.append(("B-DRUG", 0.7))
             elif low in self.FREQS:
@@ -124,14 +137,27 @@ class LexiconTagger(SlotTagger):
                 out.append(("B-UNIT", 0.6))
             elif low in self.ROUTES:
                 out.append(("B-ROUTE", 0.6))
-            elif re.fullmatch(r"\d{1,4}", w) and prev_low not in self.DURATION_HINTS:
-                out.append(("B-DOSE", 0.5))
-            elif re.fullmatch(r"\d{1,4}", w):
-                out.append(("B-DURATION", 0.6))
+            elif re.fullmatch(r"\d{1,4}", low):
+                if prev_low in self.DURATION_HINTS:
+                    out.append(("B-DURATION", 0.6))
+                elif out and out[-1][0].endswith("DURATION"):
+                    out.append(("B-DURATION", 0.6))
+                else:
+                    out.append(("B-DOSE", 0.5))
             else:
                 out.append(("O", 0.1))
-            prev_low = low
+            i += 1
         return out
+
+    @classmethod
+    def _freq_span(cls, words: list[str], i: int) -> int:
+        for n in (4, 3, 2, 1):
+            if i + n > len(words):
+                continue
+            phrase = " ".join(w.lower().strip(".,:;") for w in words[i : i + n])
+            if phrase in cls.FREQ_PHRASES:
+                return n
+        return 0
 
 
 def group_slots(text: str, tags: list[tuple[str, float]]) -> list[Slot]:
@@ -186,6 +212,30 @@ def tags_to_rows(text: str, tags: list[tuple[str, float]]) -> list[dict]:
         )
         offset += len(word) + 1
     return rows
+
+
+class FallbackTagger(SlotTagger):
+    """Prefer the learned tagger, fall back to the lexicon when it finds nothing.
+
+    The learned tagger occasionally emits I- spans with no opening B- tag,
+    which the contract drops by design. Rather than returning "unreadable" for
+    a prescription the lexicon can read, try the second tagger and report which
+    one produced the result.
+    """
+
+    def __init__(self, primary: SlotTagger, secondary: SlotTagger):
+        self._primary = primary
+        self._secondary = secondary
+        self.last_used = "primary"
+
+    def tag(self, text: str) -> list[tuple[str, float]]:
+        tags = self._primary.tag(text)
+        if any(tag.startswith("B-DRUG") for tag, _ in tags):
+            self.last_used = "learned"
+            return tags
+        tags = self._secondary.tag(text)
+        self.last_used = "lexicon"
+        return tags
 
 
 def tags_to_schedule(

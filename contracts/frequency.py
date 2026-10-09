@@ -43,6 +43,44 @@ _COUNT_WORDS = {1: "once daily", 2: "twice daily", 3: "three times daily", 4: "f
 _QNH = re.compile(r"q\s*(\d+)\s*h")
 _NX_PER_DAY = re.compile(r"(\d+)\s*(?:x|times?\s*(?:a|per)\s*day)")
 
+_SPANISH: dict[str, str] = {
+    "una vez al dia": "once daily",
+    "1 vez al dia": "once daily",
+    "dos veces al dia": "twice daily",
+    "2 veces al dia": "twice daily",
+    "tres veces al dia": "three times daily",
+    "3 veces al dia": "three times daily",
+    "cuatro veces al dia": "four times daily",
+    "cada 8 horas": "every 8 hours",
+    "cada 12 horas": "every 12 hours",
+    "cada 6 horas": "every 6 hours",
+    "cada 24 horas": "every 24 hours",
+    "cada 8 h": "every 8 hours",
+    "cada 12 h": "every 12 hours",
+    "cada 6 h": "every 6 hours",
+    "segun sea necesario": "as needed",
+    "si es necesario": "as needed",
+    "al acostarse": "at bedtime",
+    "por la manana": "in the morning",
+    "por la tarde": "in the evening",
+    "antes de las comidas": "before meals",
+    "despues de las comidas": "after meals",
+}
+
+_FRENCH: dict[str, str] = {
+    "une fois par jour": "once daily",
+    "deux fois par jour": "twice daily",
+    "trois fois par jour": "three times daily",
+    "quatre fois par jour": "four times daily",
+    "toutes les 8 heures": "every 8 hours",
+    "toutes les 12 heures": "every 12 hours",
+    "toutes les 6 heures": "every 6 hours",
+    "si besoin": "as needed",
+    "au coucher": "at bedtime",
+    "le matin": "in the morning",
+    "le soir": "in the evening",
+}
+
 
 def normalize_frequency(raw: str) -> str:
     """Return the canonical phrase for a raw frequency string.
@@ -67,5 +105,9 @@ def normalize_frequency(raw: str) -> str:
     if per_day:
         count = int(per_day.group(1))
         return _COUNT_WORDS.get(count, f"{count} times daily")
+
+    for table in (_SPANISH, _FRENCH):
+        if key in table:
+            return table[key]
 
     return text

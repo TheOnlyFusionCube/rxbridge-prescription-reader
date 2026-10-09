@@ -81,14 +81,16 @@ def recognize(image_bytes: bytes) -> PageResult:
 
     Returns a PageResult with one LineResult per detected line, ordered top to
     bottom. Raises ValueError for anything that is not a usable image.
+
+    The payload is validated here and then handed to docTR as raw bytes, so the
+    image is decoded in memory only and never touches the filesystem.
     """
     image = _decode_image(image_bytes)
-    array = np.asarray(image)
-    height, width = array.shape[:2]
+    height, width = np.asarray(image).shape[:2]
 
     from doctr.io import DocumentFile
 
-    doc = DocumentFile.from_images([array])
+    doc = DocumentFile.from_images(image_bytes)
     predictor = _get_predictor()
     result = predictor(doc)
 

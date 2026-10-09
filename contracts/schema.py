@@ -22,7 +22,7 @@ from contracts.frequency import normalize_frequency
 
 ALLOWED_TIMES_OF_DAY: tuple[str, ...] = ("morning", "noon", "evening", "night")
 
-_FIELD_ORDER: tuple[str, ...] = ("DRUG", "DOSE", "FREQ", "DURATION", "ROUTE")
+_FIELD_ORDER: tuple[str, ...] = ("DRUG", "DOSE", "UNIT", "FREQ", "DURATION", "ROUTE")
 _FIELD_TAGS = frozenset(_FIELD_ORDER)
 _DOSE_RE = re.compile(r"^([0-9]+(?:[./][0-9]+)?)\s*(.*)$")
 _DURATION_RE = re.compile(r"(\d+)")
