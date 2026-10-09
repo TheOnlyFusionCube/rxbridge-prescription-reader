@@ -110,34 +110,34 @@ def run_benchmark(model_id, adapter, data_root, per_lang, device, out_path):
             continue
         cers: list[float] = []
         hits = 0
-    # Generation budget must scale with the reference. A fixed 128 tokens
-    # covers ~380 characters, which silently truncates the paragraph-form
-    # corpora: ru references have a median of 3688 chars, fa 1041 and en 1460.
-    # Measured on the first trained run, ru median prediction was 267 chars
-    # against a 3688-char reference and 40 of 40 predictions fell below the
-    # cap, so that language's reported CER is a truncation floor rather than a
-    # transcription result. The scale keeps short references at 128 (those
-    # languages already ramble well past their reference, so raising their
-    # budget would only widen the gap) and gives long references room to finish.
-    for row in rows:
-        budget = max(128, min(4096, len(row["text"]) // 2 + 64))
-        image = Image.open(row["image"]).convert("RGB")
-        messages = [{
-            "role": "user",
-            "content": [
-                {"type": "image", "image": image},
-                {"type": "text", "text": PROMPT},
-            ],
-        }]
-        text = processor.apply_chat_template(
-            messages, add_generation_prompt=True, tokenize=False
-        )
-        enc = processor(text=text, images=[image], return_tensors="pt").to(device)
-        with torch.no_grad():
-            out = model.generate(**enc, max_new_tokens=budget, do_sample=False)
-            prediction = processor.batch_decode(
-                out[:, enc["input_ids"].shape[-1] :], skip_special_tokens=True
-            )[0]
+        # Generation budget must scale with the reference. A fixed 128 tokens
+        # covers ~380 characters, which silently truncates the paragraph-form
+        # corpora: ru references have a median of 3688 chars, fa 1041 and en 1460.
+        # Measured on the first trained run, ru median prediction was 267 chars
+        # against a 3688-char reference and 40 of 40 predictions fell below the
+        # cap, so that language's reported CER is a truncation floor rather than a
+        # transcription result. The scale keeps short references at 128 (those
+        # languages already ramble well past their reference, so raising their
+        # budget would only widen the gap) and gives long references room to finish.
+        for row in rows:
+            budget = max(128, min(4096, len(row["text"]) // 2 + 64))
+            image = Image.open(row["image"]).convert("RGB")
+            messages = [{
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image},
+                    {"type": "text", "text": PROMPT},
+                ],
+            }]
+            text = processor.apply_chat_template(
+                messages, add_generation_prompt=True, tokenize=False
+            )
+            enc = processor(text=text, images=[image], return_tensors="pt").to(device)
+            with torch.no_grad():
+                out = model.generate(**enc, max_new_tokens=budget, do_sample=False)
+                prediction = processor.batch_decode(
+                    out[:, enc["input_ids"].shape[-1] :], skip_special_tokens=True
+                )[0]
             c = cer(row["text"], prediction)
             cers.append(c)
             hits += exact_match(row["text"], prediction)
