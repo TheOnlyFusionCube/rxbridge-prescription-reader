@@ -87,13 +87,33 @@ def cer(reference: str, hypothesis: str) -> float:
 # ------------------------------------------------------------------ corpus
 
 
-def load_rows(root: Path, per_lang: int, seed: int = 0) -> list[dict]:
+def load_rows(root: Path, per_lang: int, seed: int = 0,
+              per_lang_chars: int = 40000) -> list[dict]:
     """Load train+val rows, capped per language. test.jsonl is never opened.
 
-    The cap is what keeps the corpus balanced: without it the six languages
-    with ~3200 rows supply 19200 of 22773 samples and en (60), ar (366) and
-    vi (944) are effectively drowned out, which defeats the point of a
-    multilingual run.
+    Two caps, both necessary. The row cap stops the six languages with ~3200
+    available rows drowning out en (60), ar (366) and vi (944).
+
+    The cap that actually matters is on *characters*, not rows. Measured on the
+    built corpus (train+val answer chars): ru 12.1M, fa 3.3M, vi 0.41M, ar
+    0.29M, fr 0.15M, de 0.13M, th 0.13M, ur 0.10M, en 62k, hi 65k. The five
+    line-form languages (fr/th/de/hi/ur) are ~1% each, while ru+fa are 92% of
+    all training characters. Because the loss is per token, a run capped at
+    1500 rows per language still taught the model "emit a long Russian essay"
+    as its default behaviour: it graded CER 5.66-13.43 on the short-reference
+    languages and answered a French reference with fluent Russian prose.
+
+    The paragraph-form corpora (ru, fa, ar, vi, en) are kept but subsampled by
+    character rather than dropped -- they are the only evidence those languages
+    offer, and the benchmark grades them at median 3688/882/733/447/1452 chars.
+    Truncating a paragraph would produce an invalid transcription target, so
+    rows are sampled until the budget is spent, never cut mid-way.
+
+    Each language therefore contributes at most `per_lang_chars` answer
+    characters, which is what equalises the gradient signal. 40000 is ~10x the
+    longest line-form reference (ur max 74, fr max 84) and ~1% of a single
+    Russian paragraph, so short languages keep every row and long ones keep
+    hundreds of distinct paragraphs.
     """
     rows: list[dict] = []
     for lang in LANGS:
@@ -109,8 +129,20 @@ def load_rows(root: Path, per_lang: int, seed: int = 0) -> list[dict]:
                     found.append(row)
         random.Random(seed).shuffle(found)
         found = found[:per_lang]
-        rows.extend(found)
-        print(f"  {lang}: {len(found)} rows", flush=True)
+        used = 0
+        kept: list[dict] = []
+        for row in found:
+            n = len(row.get("text") or "")
+            if used + n > per_lang_chars:
+                continue
+            used += n
+            kept.append(row)
+        rows.extend(kept)
+        print(f"  {lang}: {len(kept)} rows, {used} answer chars", flush=True)
+    # Shuffle across languages. The training loop reads rows[i % len(rows)]
+    # sequentially, so without this the model sees all of one language, then all
+    # of the next - a guaranteed forgetting spiral across ten scripts.
+    random.Random(seed + 1).shuffle(rows)
     print(f"  total: {len(rows)} rows", flush=True)
     return rows
 
@@ -218,6 +250,8 @@ def main() -> int:
     ap.add_argument("--warmup", type=int, default=60)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--per-lang", type=int, default=1500)
+    ap.add_argument("--per-lang-chars", type=int, default=40000,
+                    help="max answer chars per language; equalises gradient weight")
     ap.add_argument("--log", type=int, default=10)
     ap.add_argument("--eval-samples", type=int, default=20)
     # A previous run OOM'd at pass 5000/8000 and lost every minute because the
@@ -271,7 +305,8 @@ def main() -> int:
         model.save_pretrained(str(out_dir))
         processor.save_pretrained(str(out_dir))
 
-    rows = load_rows(Path(args.data_root), args.per_lang, args.seed)
+    rows = load_rows(Path(args.data_root), args.per_lang, args.seed,
+                     per_lang_chars=args.per_lang_chars)
     if not rows:
         print("no corpus rows found", file=sys.stderr)
         return 1
