@@ -209,13 +209,16 @@ def main() -> int:
     ap.add_argument("--accum", type=int, default=8)
     ap.add_argument("--batch", type=int, default=1)
     ap.add_argument("--lr", type=float, default=2e-4)
-    ap.add_argument("--rank", type=int, default=32)
-    ap.add_argument("--alpha", type=int, default=64)
+    ap.add_argument("--rank", type=int, default=16)
+    ap.add_argument("--alpha", type=int, default=32)
     ap.add_argument("--warmup", type=int, default=60)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--per-lang", type=int, default=1500)
     ap.add_argument("--log", type=int, default=10)
     ap.add_argument("--eval-samples", type=int, default=20)
+    # A previous run OOM'd at pass 5000/8000 and lost every minute because the
+    # only save happened at the end.
+    ap.add_argument("--save-every", type=int, default=100)
     ap.add_argument("--device", default="cuda")
     args = ap.parse_args()
 
@@ -257,10 +260,19 @@ def main() -> int:
         pass
     model.train()
 
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    def save_adapter() -> None:
+        model.save_pretrained(str(out_dir))
+        processor.save_pretrained(str(out_dir))
+
     rows = load_rows(Path(args.data_root), args.per_lang, args.seed)
     if not rows:
         print("no corpus rows found", file=sys.stderr)
         return 1
+    save_adapter()
+    print(f"baseline adapter saved to {out_dir}", flush=True)
 
     trainable = [p for p in model.parameters() if p.requires_grad]
     opt = torch.optim.AdamW(trainable, lr=args.lr, weight_decay=0.0)
@@ -312,6 +324,9 @@ def main() -> int:
             accum_left = args.accum
 
             n = len(losses)
+            if args.save_every and (n // args.accum) % args.save_every == 0:
+                save_adapter()
+                print(f"  checkpoint at opt step {n // args.accum}", flush=True)
             if n % args.log == 0:
                 el = time.time() - t0
                 rate = el / n
@@ -325,10 +340,7 @@ def main() -> int:
     except KeyboardInterrupt:
         print("\ninterrupted", file=sys.stderr)
 
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(str(out_dir))
-    processor.save_pretrained(str(out_dir))
+    save_adapter()
     print(f"saved adapter to {out_dir}", flush=True)
 
     if args.eval_samples:
