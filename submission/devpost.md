@@ -132,3 +132,12 @@ and duration.
 
 **Secondary: community pharmacists and clinic staff** verifying that a patient
 understood the label before dispensing.
+
+---
+
+## Links
+
+- **Live demo:** https://putting-bloggers-consensus-organized.trycloudflare.com
+- **API:** https://truck-regulatory-instructors-gas.trycloudflare.com (POST /extract)
+- **Repository:** https://github.com/TheOnlyFusionCube/rxbridge-prescription-reader
+- **Demo video:** `submission/demo.mp4` (12.5s)
