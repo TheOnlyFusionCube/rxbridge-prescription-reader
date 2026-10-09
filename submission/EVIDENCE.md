@@ -274,3 +274,152 @@ completeness rather than as a headline.
 This is deliberately not folded into the shipped system. Nothing here claims
 multilingual handwriting accuracy; it establishes the benchmark exists, runs on
 held-out data, and honestly reports FAIL until a trained model earns a pass.
+
+---
+
+## First trained run: LoRA fine-tune, and why it failed (run 2026-10-09)
+
+`train_lora.py` trained a rank-16 LoRA on `LiquidAI/LFM2.5-VL-3B` over
+11,870 corpus rows (1500 rows capped per language), 1000 optimiser steps x 8
+accumulation = 8000 passes, lr 2e-4, on one RTX 5060 Ti. Adapter saved to
+`lfm/adapter`; 21 OOM skips absorbed, 7+ checkpoints written, loss converged.
+
+Re-scored on the same held-out `test` shards with `benchmark.py --adapter`:
+
+| language | n | mean CER | exact | verdict |
+|---|---|---|---|---|
+| en | 14 | 0.6511 | 0.00 | FAIL |
+| fr | 40 | 10.9668 | 0.03 | FAIL |
+| de | 40 | 10.0057 | 0.12 | FAIL |
+| th | 40 | 9.7451 | 0.05 | FAIL |
+| ur | 40 | 5.9927 | 0.00 | FAIL |
+| vi | 40 | 0.4401 | 0.00 | FAIL |
+| ar | 40 | 0.8798 | 0.00 | FAIL |
+| fa | 40 | 0.7865 | 0.00 | FAIL |
+| ru | 40 | 0.9395 | 0.00 | FAIL |
+| hi | 40 | 13.4258 | 0.05 | FAIL |
+
+**Overall: 10 languages graded, 0 passed, mean CER 5.3833, verdict FAIL.**
+
+Worse than zero-shot on every language except vi. French went from 0.1153
+(pass) to 10.9668. The two languages that had passed the bar now failed it by
+two orders of magnitude. This is the honest record of a training run that made
+the model worse, kept because the cause is worth documenting.
+
+### Root cause, measured on the built corpus
+
+**Cause 1: the row cap did not balance the corpus.** Answer lengths span two
+orders of magnitude, so 1500 rows per language meant:
+
+| language | train+val answer chars | share of gradient |
+|---|---|---|
+| ru | 12,088,864 | 72.2% |
+| fa | 3,321,226 | 19.8% |
+| vi | 413,682 | 2.5% |
+| ar | 285,247 | 1.7% |
+| fr | 148,680 | 0.9% |
+| de | 133,719 | 0.8% |
+| th | 129,291 | 0.8% |
+| ur | 97,020 | 0.6% |
+| hi | 65,317 | 0.4% |
+| en | 61,780 | 0.4% |
+
+ru + fa supplied **92.7%** of all training characters; fr, de, th, hi, ur and
+en each supplied under 1%. The loss is computed per token, so the model learned
+"emit a long essay" as its default behaviour and applied it to short-reference
+languages, producing CER 5-13 where the reference is a single line. The
+preflight check had already shown the symptom and was misread as a pass: given
+a French reference it produced fluent Russian prose.
+
+Measured directly from the saved predictions:
+
+- fr: 34 of 40 predictions exceeded 380 characters against a 48-character median reference
+- de: 26 of 40 exceeded 380 characters against a 43-character median reference
+- hi: 2 of 40 exceeded 380 characters against a 15-character median reference
+
+**Cause 2: no shuffle across languages.** `load_rows` appended language by
+language and the loop read `rows[i % len(rows)]` in order, so the model trained
+on all of one script, then all of the next.
+
+### Fix applied
+
+Cap answer characters per language instead of rows, so each language
+contributes an equal gradient signal, and shuffle the combined list. With
+`--per-lang-chars 40000` every language loads 31,341-40,000 answer chars
+(verified by re-running the loader over the corpus), and long paragraphs are
+subsampled rather than truncated, because a cut RIMES paragraph is not a valid
+transcription target.
+
+### Separately: the benchmark truncated its own references
+
+`max_new_tokens=128` can express roughly 380 characters. Measured from the
+saved predictions, ru references have a median of 3570 characters while the
+median prediction was 267, and 0 of 40 ru predictions exceeded 380. So ru's
+mean CER of 0.9395 is substantially a **truncation floor**, not a
+transcription result: the model was cut off roughly 13x short of the reference.
+The same applies to en (median reference 1507, median prediction 392) and is
+part of the story for ar and fa. Any ru/en/fa/ar number in this file is a
+lower-bound error caused by the harness, not by the model, and is labelled as
+such. Fixing the budget requires a re-run and is recorded when it is done.
+
+---
+
+## Multilingual benchmark: first LoRA run (2026-10-09, run `Chev` — FAILED)
+
+`train_lora.py` trained a LoRA (rank 16, alpha 32, 1000 optimiser steps x 8
+accumulation = 8000 passes) on `htr/train` + `htr/val`, then graded the held-out
+`htr/test` shards with the same `benchmark.py`.
+
+| language | n | mean CER | median CER | exact | verdict |
+|---|---|---|---|---|---|
+| en English | 14 | 0.6511 | 0.7458 | 0.00 | FAIL |
+| fr French | 40 | **10.9668** | 8.5556 | 0.025 | FAIL |
+| de German | 40 | **10.0057** | 8.1667 | 0.125 | FAIL |
+| ru Russian | 40 | 0.9395 | 0.9361 | 0.00 | FAIL |
+| th Thai | 40 | **9.7451** | 4.3860 | 0.050 | FAIL |
+| vi Vietnamese | 40 | 0.4401 | 0.2941 | 0.00 | FAIL |
+| ar Arabic | 40 | 0.8798 | 0.8514 | 0.00 | FAIL |
+| ur Urdu | 40 | **5.9927** | 6.0000 | 0.00 | FAIL |
+| fa Persian | 40 | 0.7865 | 0.7823 | 0.00 | FAIL |
+| hi Hindi | 40 | **13.4258** | 5.2923 | 0.050 | FAIL |
+
+**Overall: 10 languages graded, 0 passed, mean CER 5.3833, verdict FAIL.**
+
+This is a **worse result than the zero-shot baseline above** (2 passed, 0.6296),
+and it is reported as such. Training on this corpus actively destroyed the two
+languages that had passed at 0.12.
+
+**Root cause, measured rather than guessed.** `load_rows` capped 1500 *rows* per
+language, but the corpora differ by two orders of magnitude in transcript
+length. Answer characters in `train`+`val`: ru 12,088,864; fa 3,321,226;
+vi 413,682; ar 285,247; fr 148,680; de 133,719; th 129,291; ur 97,020;
+en 61,780; hi 65,317. Russian and Persian therefore supplied 92% of all training
+characters while the six line-form languages supplied under 1% each. The loss is
+computed per token, so the model learned "emit a long essay" as its default
+behaviour. A held-out French reference of 48 characters came back as 563
+characters of fluent Russian prose.
+
+The prediction lengths confirm it independently: 34 of 40 French and 26 of 40
+German predictions ran past 380 characters, while their references have medians
+of 48 and 43. Some samples are still exact (`Das Nashorn stampft über die
+Savanne.` scored 0.00), so the model did learn transcription — it simply has no
+length discipline.
+
+A second, independent defect sat in the same function: rows were appended
+language by language and the training loop reads `rows[micro % len(rows)]`
+sequentially, so the model trained on all of one language, then all of the next,
+across ten scripts, with no shuffle across languages.
+
+There is also a **measurement ceiling** worth stating plainly, because it makes
+this run's ru/fa/en/ar numbers unusable: `benchmark.py` capped generation at
+`max_new_tokens=128`, which is roughly 380 characters. Russian references have a
+median length of 3688 characters, Persian 1041, English 1460 and Arabic 733, so
+those four languages could not have expressed a correct answer even with a
+perfect model. ru's median prediction was 267 characters against a 3688-character
+reference — a truncation floor, not a transcription result. Only the line-form
+languages (fr, de, th, hi, ur) are measurable at that budget.
+
+Nothing here is folded into the shipped system. The run is kept in the record
+because it is what the benchmark is for: it caught a corpus imbalance and a
+missing shuffle that a hand-check of the trained output would otherwise have
+hidden, and it shows the verifier reporting FAIL without argument.
