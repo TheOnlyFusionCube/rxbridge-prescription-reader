@@ -23,6 +23,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from contracts.schema import PrescriptionSchedule  # noqa: E402
+from src.explain import explain  # noqa: E402
 from src.ocr import MAX_IMAGE_BYTES, SUPPORTED_CONTENT_TYPES  # noqa: E402
 from src.pipeline import (  # noqa: E402
     DistilBertTagger,
@@ -77,6 +78,7 @@ def get_tagger() -> tuple[SlotTagger, str]:
 class ExtractResponse(PrescriptionSchedule):
     lines: list[dict] = []
     tagger: str = "lexicon"
+    fields: list[dict] = []
 
 
 @app.get("/health")
@@ -144,6 +146,7 @@ async def extract(image: UploadFile = File(...)) -> JSONResponse:
             for ln in page.lines
         ],
         tagger=kind,
+        fields=explain(text, tags),
     )
     logger.info(
         "extract: status=%s drugs=%d lines=%d tagger=%s elapsed=%.2fs",

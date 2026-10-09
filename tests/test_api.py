@@ -127,3 +127,24 @@ def test_fallback_tagger_prefers_learned_then_lexicon():
     assert len(tags) == len(words)
     assert all(t == "B-DRUG" for t, _ in tags)
     assert fb.last_used == "lexicon"
+
+
+def test_extract_exposes_per_field_attribution():
+    """The response must explain which tokens produced each field."""
+    r = post_image(open("fixtures_real/printed_full.jpg", "rb").read())
+    assert r.status_code == 200
+    fields = r.json()["fields"]
+    assert len(fields) == len(r.json()["drugs"])
+    for group in fields:
+        assert "weakest_field" in group
+        for name, info in group["fields"].items():
+            assert info["source"]
+            assert 0.0 <= info["confidence"] <= 1.0
+    names = {f["fields"]["drug"]["source"] for f in fields if "drug" in f["fields"]}
+    assert "Amoxicillin" in names
+
+
+def test_extract_attribution_empty_when_unreadable():
+    r = post_image(jpeg_bytes())
+    assert r.status_code in (200, 422)
+    assert r.json()["fields"] == []
