@@ -167,7 +167,16 @@ understood the label before dispensing.
 
 ## Links
 
-- **Live demo:** https://putting-bloggers-consensus-organized.trycloudflare.com
-- **API:** https://truck-regulatory-instructors-gas.trycloudflare.com (POST /extract)
+- **Live demo:** https://same-trials-seed-jewellery.trycloudflare.com
+- **API:** https://template-pair-microphone-contractor.trycloudflare.com (POST /extract)
 - **Repository:** https://github.com/TheOnlyFusionCube/rxbridge-prescription-reader
 - **Demo video:** `submission/demo.mp4` (12.5s)
+
+Verified end to end from outside the cluster on the day of submission: the frontend
+returns 200 and its JS references the live API, and POSTing a real printed
+prescription photo to the public API returns `status: ok` with 3 drugs
+(Amoxicillin 500 mg twice daily, Paracetamol 500 mg every 8 hours, Omeprazole
+20 mg once daily), tagged `distilbert+lexicon`.
+
+The tunnel URLs are ephemeral (`trycloudflare.com` quick tunnels); if a link
+shows a 530 the tunnel process needs restarting rather than the app.
