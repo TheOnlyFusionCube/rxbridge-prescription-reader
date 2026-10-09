@@ -1,11 +1,25 @@
 __pycache__/
 *.pyc
+.DS_Store
 .env
 .env.*
-.DS_Store
-models/rxner2/*.safetensors
-models/rxner2/*.bin
+
+# local virtualenv
+.venv/
+venv/
+
+# model checkpoints are build artifacts, not source
+models/
+
+# frontend
 node_modules/
 .next/
 dist/
+
+# logs and scratch
 *.log
+test-results/
+playwright-report/
+
+# local-only
+*.local
