@@ -84,9 +84,11 @@ the hypothesis ran longer than the reference: with room to ramble, some rows
 generate to the full budget, so these numbers measure runaway generation as
 well as transcription error, and the EOS fix trades one failure mode for
 another (th 0.9877 → 0.1867 with 80% exact match, but ar 0.7357 → 2.2318 as
-the adapter's hypothesis length grows). The hi improvement (1.9467 → 0.4229,
-median 0.2667, exact match 0.375 → 0.575) is mostly the disappearance of
-catastrophic long-output rows rather than better short-row transcription. en
+the adapter's hypothesis length grows). The hi improvement (mean 1.9467 →
+0.4229, exact match 0.375 → 0.575, median 0.2667 → 0.0000) is both effects at
+once: the median reaching 0.0000 with exact match up to 0.575 is genuinely
+better short-row transcription, and the remaining gap between a 0.0000 median
+and a 0.4229 mean is a minority of long-output rows that still run away. en
 has n=14 because the shard holds only 14 test rows. Both arms used the same
 split, seed, budget, and greedy decode; the runs happened about an hour apart
 on GPU 2 while GPUs 0-1 finished training, and nothing in this document was
