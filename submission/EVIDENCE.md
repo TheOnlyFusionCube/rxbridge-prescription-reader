@@ -952,3 +952,51 @@ So the standing is 4 of 10 languages at CER 0.25, mean 0.4648, verdict FAIL.
 The retrains launched after this run exist to attack the remaining six with
 more data rather than more decoding, since the decoding levers are now
 measured and their ceiling is visible.
+
+
+---
+
+## Prompt wording on the EOS-fixed model (2026-10-10)
+
+With budget and penalties both measured and at their ceiling, the one lever
+left that acts *before* the model decides to emit a 500-char essay is the text
+it reads alongside the image. The stop-rule gap is a decision the model makes
+early, and every decode-time lever can only shorten the damage after the fact.
+Three prompt variants were tested on the seven languages that still fail after
+the 1024+penalty run, 15 val rows each, 128 tokens, greedy, adapter_v4:
+
+  base    - the exact prompt every published run used (control)
+  oneline - base + "Output exactly one line of text and stop."
+  stop    - base + "Stop immediately after the last character of the
+             transcription."
+
+| prompt | ur | fa | ar | ru | en | hi | vi | MEAN |
+|---|---|---|---|---|---|---|---|---|
+| base | 0.8208 | 0.8004 | 0.8041 | 0.9292 | 0.3436 | 0.4592 | 0.2827 | 0.6343 |
+| oneline | 0.8241 | 0.8666 | 0.8564 | 0.9309 | 0.3641 | 0.4592 | 0.2659 | 0.6525 |
+| stop | 0.7583 | 0.8046 | 0.8113 | 0.9305 | 0.3380 | 0.4592 | 0.2655 | 0.6239 |
+
+**Verdict: prompt wording is not the lever.** Measured on the val shards, which
+are training data, so none of this is selected against held-out test; it is a
+ceiling check, not a result. `prompt_probe.py` on the cluster holds the probe.
+
+The extra instruction does not make the model stop. `oneline` is worse than the
+control on four of seven languages and worse on the mean (0.6525 against
+0.6343), because "one line" reads as a formatting constraint on a model that is
+already emitting a paragraph, and it answers by padding. `stop` is the best of
+the three at 0.6239, but the entire gain is 0.0104 of mean CER, and it comes
+from ur (0.8208 to 0.7583) and en (0.3436 to 0.3380) -- trimming the long wrong
+answers the control produces -- while vi moves 0.2827 to 0.2655 and stays above
+the bar. No language crosses 0.25 in any variant.
+
+The instructive part is hi: identical to four decimals across all three prompts
+(0.4592). When the model emits the same wrong answer regardless of what it is
+told, the instruction is not reaching the decision. That is a capacity and data
+statement, not a prompting one, and it agrees with what the decode levers
+already showed.
+
+So three different kinds of lever -- budget, penalties, prompt wording -- all
+bottom out at the same wall, and the wall is the stop rule for the six
+long-form languages. The remaining attack is the one already in flight: more
+training data per language, via the two retrains. Nothing here changes any
+published number; the control column IS the published prompt, and it stays.
