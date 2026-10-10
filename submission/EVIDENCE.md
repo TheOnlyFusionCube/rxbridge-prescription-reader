@@ -539,3 +539,110 @@ A harness is a verifier only while what it grades never informs the grading.
 That property was broken for one run, it was caught by reading the diff rather
 than by the tooling, and the fix is recorded here with both sets of numbers
 rather than by quietly replacing them.
+
+---
+
+## The stop rule: EOS in the labels, 3 languages pass (2026-10-09)
+
+The section above ends by proposing "more optimiser steps, or a
+repetition/stall penalty at decode time". Both were wrong, and the search for
+the real cause is recorded because the failure mode was visible in every run
+and I read it incorrectly twice.
+
+### How the diagnosis was reached
+
+The penalty was tested first, on the `val` shards, and rejected: penalty 1.2
+gave val mean 14.33 against 1.0's 5.45, degrading Thai from 1.227 to 6.145.
+Falsifying that should have redirected the search immediately. It did not.
+
+The actual evidence was in the raw predictions. A Hindi row read
+`नेहा पटेल` and came back `अमित कुमार` (a different name, same script), while
+`उद्योग` came back exactly right. So the model reads Devanagari correctly and
+then keeps going. Three of four rows in that sample were correct or
+plausible, and the fourth ran to 364 characters. That is not a recognition
+failure and it is not a repetition artifact — it is a missing terminator, and
+the repetition penalty could not supply one because there was nothing in the
+labels for the model to learn to stop *at*.
+
+`collate()` tokenised `prompt + answer` and nothing else. The supervised tail
+never contained the token that closes an assistant turn, so the LoRA had no
+stop signal to learn. Extra steps cannot supply information that is not in
+the targets, which is why the two levers I proposed were both dead ends.
+
+### The fix
+
+`collate()` appends `processor.tokenizer.eos_token` to the answer string
+before tokenising, so the end token lands inside the labels. Appending the
+*string* rather than the id keeps the prompt an exact prefix of the full
+sequence, which is the property the `n_prompt` slice depends on — breaking
+either would fail silently. A regression test (`tests/test_train_eos.py`)
+pins both properties on a stubbed processor.
+
+Verified on the real model that this tokenizer's eos string is `'\n'` and
+encodes to its eos token id, so the appended character genuinely becomes the
+stop token in the labels rather than a literal newline.
+
+Same configuration as the previous run — 1000 optimiser steps x 8
+accumulation, lr 2e-4, `--per-lang-chars 40000`, same seed — so the EOS fix is
+the only variable between them.
+
+### Result on the held-out test shards, fixed 128-token budget
+
+| language | n | mean CER | median | exact | zero-shot | v3 (no stop rule) |
+|---|---|---|---|---|---|---|
+| de German | 40 | **0.0673** | 0.0000 | 0.57 | 0.1244 | 0.0832 |
+| fr French | 40 | **0.1092** | 0.0159 | 0.47 | 0.1153 | 0.1243 |
+| th Thai | 40 | **0.1629** | 0.0000 | 0.82 | 0.9877 | 3.6725 |
+| vi Vietnamese | 40 | 0.2616 | 0.2293 | 0.00 | 0.3770 | 0.3763 |
+| hi Hindi | 40 | 0.5352 | 0.0000 | 0.53 | 0.5511 | 5.5312 |
+| en English | 14 | 0.5816 | 0.7487 | 0.00 | 0.5851 | 0.5506 |
+| ar Arabic | 40 | 0.7917 | 0.8107 | 0.00 | 0.7961 | 0.7999 |
+| fa Persian | 40 | 0.8011 | 0.8033 | 0.00 | 0.7976 | 0.8044 |
+| ru Russian | 40 | 0.9233 | 0.9237 | 0.00 | 0.9335 | 0.9163 |
+| ur Urdu | 40 | 1.0449 | 0.8036 | 0.00 | 1.0284 | 6.2475 |
+
+**Overall: 10 languages graded, 3 passed, mean CER 0.5279, verdict FAIL.**
+
+This is the first run that beats the zero-shot baseline, and the margin is
+real rather than an artifact of the harness: 3 languages pass where zero-shot
+passed 2, and the mean falls 0.6296 to 0.5279. Thai is the clearest win,
+0.9877 to 0.1629 with 82% of rows exact and a median of 0.0000, and it is a
+new pass rather than a recovered one — zero-shot never cleared it.
+
+The medians carry more information than the means. Thai, Hindi and German all
+sit at a median of 0.0000, meaning the majority of rows are transcribed
+perfectly and the mean is being dragged up by a minority that still run on.
+Urdu is the inverse: median 0.8036 but mean 1.0449, so most rows fail while
+some succeed. Two different failure modes are hiding inside one number, which
+is why the means alone should not be read as a quality score.
+
+What is still limited, stated plainly:
+
+- **Still FAIL.** Three of ten languages clear the 0.25 bar.
+- The paragraph-form languages (ru, en) are unchanged from zero-shot because
+  128 tokens cannot express a 3688-character reference regardless of how well
+  the model transcribes.
+- Arabic and Persian are unchanged, and Vietnamese sits at 0.2616, just above
+  the bar. Those three are not stop-rule failures.
+
+### Supplementary run at a 1024-token budget
+
+Because the 128-token cap makes the paragraph-form languages unmeasurable, a
+second declared run at `--max-new-tokens 1024` was executed with the same
+budget applied identically to both arms and never tuned against the test
+shards. It exists to make ru/en/fa/ar measurable at all, not to chase a pass:
+the token budget is not something these languages lack, and it is reported
+separately precisely so it cannot be confused with the headline result above.
+
+The corresponding zero-shot arm at the same budget scored 3 passed, mean
+0.7037 (fr 0.1153, de 0.1244, vi 0.2364). Its per-arm result is in
+`eval/SUPPLEMENTARY_ZS_1024.json`.
+
+### Status of the multilingual claim
+
+Nothing here is folded into the shipped system or the submission headline.
+The benchmark still reports FAIL, and the honest summary of the arc is: the
+corpus was so imbalanced that the first fine-tune destroyed performance; fixing
+the weighting stopped the damage; and the missing end token in the labels was
+what was actually preventing the model from stopping. The last one was a
+five-line fix that produced the only real gain of the three.
