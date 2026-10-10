@@ -442,3 +442,32 @@ The benchmark still says FAIL, which is the honest verdict: 2 of 10 languages at
 CER bar 0.25 with a 1.93 mean. Nothing in this section is folded into the
 submission headline, and the multilingual claim remains absent from
 `devpost.md` for exactly this reason.
+
+### Attempted next lever, and why it was dropped (2026-10-09)
+
+The section above ends by proposing two levers for the residual failure: more
+optimiser steps, or a repetition/stall penalty at decode time. The penalty is
+the cheap one, so it was tested before anything expensive.
+
+Measured on the **`val` shards**, which are training data (`load_rows` reads
+`train` + `val`), 20 rows per language, on the `adapter_v2` checkpoint. Using
+val rather than test keeps the held-out shards out of any model-selection
+decision, so whatever this says, the reported test numbers are unaffected:
+
+| repetition penalty | val mean CER | th | hi | ur | de | fr |
+|---|---|---|---|---|---|---|
+| 1.0 (current) | **5.4452** | 1.227 | 15.421 | 9.765 | 0.027 | 0.787 |
+| 1.2 | 14.3258 | 6.145 | 51.568 | 10.472 | 0.035 | 3.409 |
+
+The penalty makes everything worse, roughly 2.6x on the mean, and degrades
+French from 0.787 to 3.409 and Thai from 1.227 to 6.145. So the "fails to stop"
+reading is **not** the mechanism, and a decode-time repetition penalty is not
+the fix. The default 1.0 is retained and the benchmark is unchanged.
+
+The more informative number in that table is German at **0.027** on val — 20
+held-adjacent rows at near-perfect transcription — against hi 15.421 and ur
+9.765 on the same shards. Those two are failing on data the model was trained
+on, not on unseen data, so this is not a generalisation gap that more steps
+would close. The next investigation should be whether the Hindi and Urdu image
+and transcript rows are actually paired, the way `build_corpus.py`'s reader bugs
+were for Russian and Arabic, before spending any more GPU time on it.
