@@ -754,3 +754,23 @@ entry gave 208.4 kB because that entry already repeats the shared chunks, so the
 shared ones were counted twice; a separate sum that added `polyfills` and
 `framework` as well gave 233 kB and over-counted those too. Next.js's own report
 is the source of truth here, not the chunk arithmetic.
+
+---
+
+## docTR printed-form confidence, corrected (2026-10-09)
+
+`README.md` and `submission/devpost.md` both claimed docTR reads the printed
+scaffolding "at ~0.99 confidence". Measured from the same e2e run as the table
+above - 20 OCR lines on `fixtures_real/printed_full.jpg`:
+
+| confidence | lines |
+|---|---|
+| min | 0.8356 |
+| max | 0.9933 |
+| >= 0.99 | 1 of 20 |
+| >= 0.95 | 10 of 20 |
+
+So ~0.99 was one line, not the printed half generally. Both files now state
+0.84-0.99, which is the measured range. The corrected claim survives: docTR
+handles the printed half and fails on the cursive, which is what the 0.3076
+char-F1 and the `Mletzina 20` substitution show.
