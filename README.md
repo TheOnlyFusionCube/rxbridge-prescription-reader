@@ -40,5 +40,5 @@ to do.
 See `submission/EVIDENCE.md`. The headline number is honest rather than
 flattering: docTR scores a mean char-F1 of 0.3076 on four visually-verified
 real prescription photographs, because they are handwritten. On a printed
-prescription the full pipeline extracts 3/3 drugs with dose, frequency, times
-and duration.
+prescription the full pipeline extracts 3/3 drugs with dose, frequency and
+day-grid times, recovering duration for one of the three.
