@@ -370,3 +370,73 @@ Two conclusions that matter for how these numbers are read:
 Stated plainly: this probe found that a harness bug inflated ru's error, and
 fixed the budget to measure it correctly, but the honest number still fails.
 Nothing here rescues the long-form languages.
+
+---
+
+## Multilingual benchmark: character-balanced retrain (2026-10-09)
+
+`train_lora.py` retrained the same rank-16 LoRA on a corpus capped by
+**answer characters per language** (`--per-lang-chars 40000`) rather than by
+row count, and with the row list shuffled across languages. Same model, same
+held-out `htr/test` shards, same 0.25 bar. Result on the held-out test set:
+
+| language | n | mean CER | median | exact | zero-shot | v1 (row-capped) | verdict |
+|---|---|---|---|---|---|---|---|
+| de German | 40 | **0.0832** | — | 0.35 | 0.1244 | 10.0057 | **PASS** |
+| fr French | 40 | **0.1243** | — | 0.38 | 0.1153 | 10.9668 | **PASS** |
+| vi Vietnamese | 40 | 0.3807 | — | 0.00 | 0.3770 | 0.4401 | fail |
+| fa Persian | 40 | 0.8176 | — | 0.00 | 0.7976 | 0.7865 | fail |
+| ar Arabic | 40 | 0.9436 | — | 0.00 | 0.7961 | 0.8798 | fail |
+| ru Russian | 40 | 0.9825 | — | 0.00 | 0.9335 | 0.9395 | fail |
+| th Thai | 40 | 3.6725 | — | 0.38 | 0.9877 | 9.7451 | fail |
+| hi Hindi | 40 | 5.5312 | — | 0.40 | 0.5511 | 13.4258 | fail |
+| ur Urdu | 40 | 6.2475 | — | 0.00 | 1.0284 | 5.9927 | fail |
+| en English | 14 | 0.5214 | — | 0.00 | 0.5851 | 0.6511 | fail |
+
+**Overall: 10 languages graded, 2 passed, mean CER 1.9304, verdict FAIL.**
+
+### What the fix did and did not achieve
+
+The character cap repaired the regression completely. Against the row-capped
+run, every language improved: French 10.9668 → 0.1243, German 10.0057 →
+0.0832, Thai 9.7451 → 3.6725, Hindi 13.4258 → 5.5312, Urdu 5.9927 → 6.2475.
+Mean CER fell 5.3833 → 1.9304. The two languages that passed zero-shot pass
+again, and German now clears the bar *better* than the zero-shot baseline did
+(0.1244 → 0.0832), so the fine-tune did add real transcription ability where
+the corpus supports it.
+
+Against zero-shot the picture is mixed and is recorded as such. Only German
+improved on the held-out test set: 0.1244 zero-shot → 0.0832 trained. French is
+essentially unchanged (0.1153 → 0.1243, still passing), and Vietnamese and
+Russian are within noise of their zero-shot values (0.3770 → 0.3807 and
+0.9335 → 0.9825). Every other language is worse than zero-shot, Thai, Hindi and
+Urdu most severely (0.9877 → 3.6725, 0.5511 → 5.5312, 1.0284 → 6.2475).
+
+The still-failing languages fall into two clearly separated groups, which is
+the useful finding:
+
+**Group A — length-limited.** ru, fa, ar, and en/Cyrillic-scale are
+paragraph-form. Russian references have a median of 3688 characters; even at a
+1024-token budget the model produces ~1400 characters before stopping, i.e. it
+has no learned terminal behaviour for long targets. Its 0.9825 is a real
+result now rather than a truncation artefact, but it is nowhere near 0.25 and
+will not get there by fixing the harness.
+
+**Group B — short-reference but rambling.** th, hi and ur have references of
+11-74 characters, which the model *should* handle, yet they sit at 3.67, 5.53 and
+6.25. Their exact-match rates are non-zero (th 0.38, hi 0.40), so the model gets
+individual lines right and then fails to stop — the same no-termination problem
+that ruined the first run, still present on the line-form languages. Thai's
+median CER being far below its mean is the fingerprint: most samples are fine,
+a minority run away and dominate the average.
+
+So the remaining gap is not corpus weighting, which is fixed, but an
+under-trained stopping rule. With 8000 passes over 5409 balanced rows the model
+learned the character distributions but not a reliable end-of-sequence;
+1000 → 4000 optimiser steps, or a repetition/stall penalty at decode time, are
+the two obvious next levers. Neither is attempted here.
+
+The benchmark still says FAIL, which is the honest verdict: 2 of 10 languages at
+CER bar 0.25 with a 1.93 mean. Nothing in this section is folded into the
+submission headline, and the multilingual claim remains absent from
+`devpost.md` for exactly this reason.
