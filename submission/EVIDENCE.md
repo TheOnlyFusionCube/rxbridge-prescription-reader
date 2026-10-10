@@ -247,7 +247,7 @@ run only passes if *every* graded language clears it.
 | ur Urdu | 40 | 1.0284 | 0.0 | FAIL |
 
 **Overall: 10 languages graded, 2 passed, mean CER 0.6296, verdict FAIL.**
-374 scored rows. Reproduce with:
+374 scored rows in `eval/BENCHMARK.json`. Reproduce with:
 
     python3 benchmark.py --model LiquidAI/LFM2.5-VL-3B --per-lang 40
 
@@ -297,6 +297,7 @@ accumulation = 8000 passes) on `htr/train` + `htr/val`, then graded the held-out
 | hi Hindi | 40 | **13.4258** | 5.2923 | 0.050 | FAIL |
 
 **Overall: 10 languages graded, 0 passed, mean CER 5.3833, verdict FAIL.**
+374 scored rows in `eval/BENCHMARK_TRAINED.json`.
 
 This is a **worse result than the zero-shot baseline above** (2 passed, 0.6296),
 and it is reported as such. Training on this corpus actively destroyed the two
@@ -394,6 +395,7 @@ held-out `htr/test` shards, same 0.25 bar. Result on the held-out test set:
 | en English | 14 | 0.5214 | — | 0.00 | 0.5851 | 0.6511 | fail |
 
 **Overall: 10 languages graded, 2 passed, mean CER 1.9304, verdict FAIL.**
+374 scored rows in `eval/BENCHMARK_V2.json`.
 
 ### What the fix did and did not achieve
 
@@ -520,7 +522,7 @@ Re-measured on the same held-out `htr/test` shards with the fixed budget:
 | ur Urdu | 40 | 6.2475 | 1.0284 | 6.2475 | 6.2475 |
 
 **Corrected overall: 10 languages graded, 2 passed, mean CER 1.9106,
-verdict FAIL.**
+verdict FAIL.** 374 scored rows in `eval/BENCHMARK_V3.json`.
 
 The conclusion is unchanged and is weaker than the section above claimed. The
 character-balanced retrain did recover the line-form languages from the
@@ -602,6 +604,7 @@ the only variable between them.
 | ur Urdu | 40 | 1.0449 | 0.8036 | 0.00 | 1.0284 | 6.2475 |
 
 **Overall: 10 languages graded, 3 passed, mean CER 0.5279, verdict FAIL.**
+374 scored rows in `eval/BENCHMARK_V4.json`.
 
 This is the first run that beats the zero-shot baseline, and the margin is
 real rather than an artifact of the harness: 3 languages pass where zero-shot
