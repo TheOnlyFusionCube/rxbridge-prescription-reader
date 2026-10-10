@@ -468,8 +468,8 @@ The more informative number in that table is German at **0.027** on val — 20
 held-adjacent rows at near-perfect transcription — against hi 15.421 and ur
 9.765 on the same shards. Those two are failing on data the model was trained
 on, not on unseen data, so this is not a generalisation gap that more steps
-right, individual lines are exact (th exact-match 0.38, hi 0.40) and then ramples
-on others, and the harness's own 128-token ceiling compounds it for the
+right, individual lines are exact (th exact-match 0.38, hi 0.40) and then runs on
+others, and the harness's own 128-token ceiling compounds it for the
 paragraph-form languages.
 
 The lesson worth recording: a benchmark is a verifier only while the thing it
@@ -531,7 +531,7 @@ ru, en and vi are within noise of it. Only th, hi and ur remain clearly worse
 than zero-shot, and those are exactly the languages the val probe showed
 failing on their own training rows.
 
-Nothing here beats the zero-shot benchmark. The leaning out is that the corpus
+Nothing here beats the zero-shot benchmark. The lesson is that the corpus
 rebalancing was necessary and correct — it undid real damage — but it was never
 sufficient on its own, and the earlier section overstated what it bought.
 
@@ -664,7 +664,7 @@ pre-EOS `adapter_v2` at 128. Those last two are different adapters, so this is
 not a within-adapter budget effect and is not presented as one — there is no
 `adapter_v3` run at 128 tokens to compare against. What it does show is that
 the trained EOS adapter rambles on Arabic specifically when given room, which is
-the rample signature surviving into high budgets and is a reason not to raise
+the rampaging signature surviving into high budgets and is a reason not to raise
 the cap globally.
 
 So the 128-token ceiling should be read as understating ru and en, being
