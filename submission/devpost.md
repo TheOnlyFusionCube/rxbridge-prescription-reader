@@ -181,7 +181,9 @@ understood the label before dispensing.
 - **Live demo:** https://same-trials-seed-jewellery.trycloudflare.com
 - **API:** https://template-pair-microphone-contractor.trycloudflare.com (POST /extract)
 - **Repository:** https://github.com/TheOnlyFusionCube/rxbridge-prescription-reader
-- **Demo video:** `submission/demo.mp4` (12.5s)
+- **Demo video:** `submission/demo_v2.mp4` (29.9s, 1080x1920) — the app walkthrough.
+  Source composition in `submission/video_src/`. (`submission/demo.mp4` is an
+  earlier 12.5s cut and is kept for reference only.)
 
 Verified end to end from outside the cluster on the day of submission: the frontend
 returns 200 and its JS references the live API, and POSTing a real printed
