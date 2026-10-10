@@ -1061,3 +1061,166 @@ pass and the largest CER move since the EOS fix -- without reaching five. The
 verdict is still FAIL, and the standing pass count is still four of ten. The
 1024-token arm on v5 was measured to complete the picture, and retrain B
 (600k chars per language) is the larger-data endpoint of the same attack.
+
+
+---
+
+## adapter_v5 at the 1024-token budget with penalties (2026-10-10)
+
+Same adapter as the section above, same declared penalty arm, at the 1024-token
+budget. This is the second half of the disclosure rule: the v4 numbers in that
+column were post-hoc, so the v5 column is measured to show whether the
+configuration that produced v4's optimistic vi actually holds up on a better
+model, or whether it was a selection artefact.
+
+| language | v4 128 penal | v4 1024 penal | v5 128 penal | v5 1024 penal |
+|---|---|---|---|---|
+| de German | 0.0679 | 0.0679 | 0.0418 | 0.0418 |
+| fr French | 0.1100 | 0.1100 | 0.0777 | 0.0777 |
+| th Thai | 0.1721 | 0.1721 | 0.1632 | 0.1632 |
+| vi Vietnamese | 0.2648 | 0.2060 | 0.1945 | **0.1313** |
+| hi Hindi | 0.5464 | 0.5464 | 0.4184 | 0.4184 |
+| en English | 0.5200 | 0.4610 | 0.5926 | 0.5867 |
+| fa Persian | 0.7885 | 0.7264 | 0.7751 | 0.7027 |
+| ar Arabic | 0.7468 | 0.7360 | 0.7110 | 0.6168 |
+| ur Urdu | 0.8073 | 0.8073 | 0.7967 | 0.7967 |
+| ru Russian | 0.9163 | 0.8148 | 0.9111 | 0.8025 |
+
+**Overall: 4 passed, mean CER 0.4338 -- the lowest mean of any run here.**
+Scrubbed per-row data in `eval/BENCHMARK_V5_PENAL_1024.json`.
+
+The budget now buys something it did not buy for v4. Vietnamese falls from
+0.1945 to 0.1313, its best number in the campaign and 0.0753 under the bar, and
+it is the only language that moves at all. Arabic 0.7110 to 0.6168 and Russian
+0.9111 to 0.8025 improve without crossing. Everything else is unchanged to four
+decimals, including Hindi at 0.4184 in both columns and English moving only
+0.0059.
+
+That is the clean reading of why v4's 1024 run looked like a trap. For v4 the
+same budget made vi worse (0.2648 to 0.6013 without penalties) and in
+combination recovered it only to 0.2060 -- the model ran longer, rambled, and
+the penalties had to claw the answer back. For v5 the stop rule is solid enough
+that extra room is spent on content instead of repetition, and vi uses it: vi's
+references have a median of 447 characters, which needs roughly 184 tokens, so
+at a 128-token budget the answer was being truncated. The budget was never the
+lever; a working stop rule was the precondition for the budget to matter.
+
+English is the honest exception and it cuts the other way: at 128 tokens it was
+0.5926 and at 1024 it is 0.5867, meaning the larger budget recovered almost
+none of the 0.5200 it scored under v4. Its references have a median of 1452
+characters, far beyond even 1024 tokens, so no budget in this campaign reaches
+them. That is a corpus problem, not a decoding one.
+
+So v5 holds four passes at both budgets with a mean of 0.4682 at 128 and 0.4338
+at 1024, and both numbers are better than v4's equivalent arms. The verdict is
+still FAIL.
+
+
+---
+
+## Retrain B: 600k chars per language, held-out at 128 tokens with penalties (2026-10-10)
+
+The same attack as retrain A with three times the character budget, to find
+where the data-volume curve turns over. Everything else identical: 1000
+optimiser steps x 8 accumulation, lr 2e-4, rank 16, EOS in the labels, global
+shuffle, held-out htr/test at 40 rows per language, the declared penalty arm.
+
+| language | v5 200k penal | v6 600k penal | verdict |
+|---|---|---|---|
+| de German | 0.0418 | 0.0413 | **PASS** |
+| fr French | 0.0777 | 0.0786 | **PASS** |
+| vi Vietnamese | 0.1945 | 0.1755 | **PASS** |
+| hi Hindi | 0.4184 | 0.3802 | fail |
+| en English | 0.5926 | 0.5709 | fail |
+| fa Persian | 0.7751 | 0.7574 | fail |
+| ar Arabic | 0.7140 | 0.7140 | fail |
+| ur Urdu | 0.7967 | 0.8139 | fail |
+| ru Russian | 0.9111 | 0.9103 | fail |
+| th Thai | 0.1632 | 0.2976 | fail |
+
+**Overall: 3 passed, mean CER 0.4740 against v5's 0.4682 and 4 passes.
+Verdict FAIL.** Scrubbed per-row data in `eval/BENCHMARK_V6_PENAL.json`.
+
+More data is not uniformly better, and this is the run that proves it. Thai
+went from 0.1632, a pass with 35% headroom under the bar, to 0.2976 -- the
+largest regression in the campaign and the only pass that a training change has
+ever cost. Thai was the language the EOS fix was invented for; its references
+are short (median 11 characters) and it was already solved. Tripling the
+character budget diluted a language that was already working, which is the
+failure mode the char budget was supposed to prevent and instead produced from
+the other direction.
+
+Everything else says the same thing more quietly. Hindi improved to 0.3802, its
+best number in any arm, and Arabic, Russian, Persian and Urdu are flat to within
+0.04. English improved 0.0217. None of it crossed the bar, and the one language
+that did cross it under v5 fell out.
+
+So the volume curve has a peak and 600k is past it: v4 at 40k scores 3 passes
+and 0.4940, v5 at 200k scores 4 and 0.4682, v6 at 600k scores 3 and 0.4740.
+adapter_v5 is the best model in the campaign on both counts and it is the one
+every comparison should be graded against from here.
+
+What the three data arms together establish is that data volume was worth
+exactly one pass and a mean improvement of 0.06, and it is now also spent. The
+six remaining languages are not going to be closed by re-running the same
+trainer with a different number, and the next question is what actually binds
+them -- which is what the corpus counts below are for.
+
+
+---
+
+## Corpus supply: what binds the remaining six (2026-10-10)
+
+The data-volume question only makes sense once you know how much data each
+language actually has. Counted over `htr/<lang>/{train,val,test}.jsonl`,
+characters of ground-truth text, against the caps the retrains used:
+
+| language | rows | chars | % of 200k cap | % of 600k cap |
+|---|---|---|---|---|
+| ru Russian | 3400 | 12,856,352 | 100% | 100% |
+| fa Persian | 3400 | 3,529,506 | 100% | 100% |
+| vi Vietnamese | 1144 | 499,563 | 100% | 83% |
+| ar Arabic | 457 | 357,708 | 100% | 59% |
+| fr French | 3400 | 157,763 | 78% | 26% |
+| de German | 3400 | 141,866 | 70% | 23% |
+| th Thai | 3400 | 137,432 | 68% | 22% |
+| ur Urdu | 2403 | 105,833 | 52% | 17% |
+| en English | 74 | 82,231 | 41% | 13% |
+| hi Hindi | 3400 | 69,322 | 34% | 11% |
+| bn Bengali | 0 | 0 | 0% | 0% |
+| ko Korean | 0 | 0 | 0% | 0% |
+| ml Malayalam | 0 | 0 | 0% | 0% |
+| or Odia | 0 | 0 | 0% | 0% |
+| zh Chinese | 0 | 0 | 0% | 0% |
+
+Read the top four rows against the retrain results and the campaign's entire
+data story closes. Russian and Persian have 12.8M and 3.5M characters and score
+0.9111 and 0.7751 -- among the worst in the table. They are not data-starved at
+any budget in this campaign; the 200k and 600k caps both saturate on them, which
+is why v5 and v6 moved ru and fa by 0.005 and 0.015 respectively. Their failure
+is model capacity for those scripts, not corpus volume, and no version of this
+trainer fixes it. Arabic and Vietnamese are the same story with less margin:
+both saturate at 200k, and vi is the language that did cross, at 0.1313 with the
+largest budget. There is no remaining data lever for any of them.
+
+The bottom rows are where the actual opportunity is, and they are not a
+modelling problem. English has 74 rows and 82k characters, and its references
+have a median of 1452 characters -- its ceiling in this corpus is a handful of
+long prescriptions, and 40 test rows of those is a noisy verdict, not a
+measurement. Hindi has 3400 rows but only 69k characters, a median reference
+near 11 characters: it is line-form like Thai, so its rows are cheap in
+characters and the 600k cap spent 11%. Both improved when they got more data
+(hi 0.5464 to 0.3802 across the three arms) and both are now limited by supply.
+Urdu at 105k and 52% is the same shape as hi.
+
+The five empty directories are the finding that matters for the stated goal.
+The benchmark grades ten languages and the target is ten-plus; `htr/` contains
+`bn`, `ko`, `ml`, `or` and `zh` directories with zero rows in every split. That
+means five of the fifteen languages on disk are unmeasured rather than failing,
+and the campaign has never tested whether the model can transcribe them at all.
+The honest standing is therefore not "6 of 10 fail" but "4 of 10 pass and 5 more
+are unmeasured", and the path to a higher pass count is corpus acquisition for
+those five, not further tuning of the trainer or the decoder.
+
+Nothing in this section changes a graded number. It is the census that says
+where the next unit of work belongs.
