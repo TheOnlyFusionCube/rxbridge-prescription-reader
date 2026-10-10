@@ -1554,3 +1554,56 @@ rendered text, English's is 74 paragraph rows against a line-crop public set,
 five languages are empty directories, and Russian and Persian have 12.8M and
 3.5M characters available and saturate at 200k without moving -- which is
 capacity for those scripts, not anything a flag can reach.
+
+
+---
+
+## Optimiser passes: the one knob never moved (declared 2026-10-11)
+
+There is a sixth knob, and the campaign has never touched it. Every retrain in
+this file has run `--steps 1000 --accum 8`, which is 8,000 forward/backward
+passes, and that number was fixed before the corpus started growing. It did
+grow: v5 trained on 8,524 rows, v7 on 9,964, v8 on 17,590. So the passes each
+row was actually seen fell from 0.94 to 0.80 to 0.45 without anyone choosing
+for it to.
+
+| run | rows | passes | views per row |
+|---|---|---|---|
+| v5 (200k, row cap 1500) | 8,524 | 8,000 | 0.94 |
+| v7 (200k + IAM) | 9,964 | 8,000 | 0.80 |
+| v8 (row cap 3200) | 17,590 | 8,000 | 0.45 |
+
+That reframes the v8 result rather than just recording it. v8 gave Hindi more
+than twice the characters it had ever seen and Hindi did not move; it also gave
+each row barely half the attention v5 gave its rows. Both readings were offered
+in the last section -- the data is rendered text, and the views halved -- and
+this run separates them. If v8's flat Hindi and drifting Thai are an
+undertraining artefact of the row expansion, then holding the views per row
+fixed should recover v7's standing while keeping the English and French gains
+the row cap produced. If Hindi is still flat, the rendered-text explanation
+stands and the row cap's value was only ever English.
+
+Declared before any number exists: adapter_v9 is adapter_v8's exact
+configuration with `--steps 2000` and nothing else changed. That makes 16,000
+passes against 17,590 rows, or 0.91 views per row, within 3% of v5's 0.94 --
+the density the campaign's best score was achieved at -- while carrying the
+row cap and the IAM corpus that v8 introduced. Both held-out arms are
+pre-declared: 128 tokens with the `pen1.2+ngram3` penalty arm, and 1024 tokens
+with the same penalties, on the untouched htr/test shards.
+
+The comparison that matters is v9 against v8, which changes one thing (the step
+count), and secondarily v9 against v5, which changes the row cap and IAM as
+well. The cost side is named in advance again: this is the longest run of the
+campaign, roughly 3.5 hours at the measured 0.78 seconds per pass, and the
+inline val eval has already shown on a long run that a language's fit can
+destabilise (v8's Urdu val collapsed to 2.4616 while its held-out number stayed
+flat). If v9 inherits that pattern the honest reading is that longer training
+reshuffles which languages fit, not that it helps them.
+
+Three specific things would count as a result, stated before the run so they
+cannot be moved afterwards: Hindi below 0.3376 at either budget would falsify
+the rendered-text explanation and vindicate the row cap; Thai returning to
+0.1852 or better would show the dilution was an artefact of the step count;
+and any fifth language crossing 0.25 would be the first since the EOS fix. If
+none of the three occurs, the step count joins the other five spent levers and
+the campaign has measured everything this trainer exposes.
