@@ -468,6 +468,74 @@ The more informative number in that table is German at **0.027** on val — 20
 held-adjacent rows at near-perfect transcription — against hi 15.421 and ur
 9.765 on the same shards. Those two are failing on data the model was trained
 on, not on unseen data, so this is not a generalisation gap that more steps
-would close. The next investigation should be whether the Hindi and Urdu image
-and transcript rows are actually paired, the way `build_corpus.py`'s reader bugs
-were for Russian and Arabic, before spending any more GPU time on it.
+right, individual lines are exact (th exact-match 0.38, hi 0.40) and then ramples
+on others, and the harness's own 128-token ceiling compounds it for the
+paragraph-form languages.
+
+The lesson worth recording: a benchmark is a verifier only while the thing it
+grades never informs the grading. I broke that rule in a five-character edit and
+nearly published it as a result. The fix is a constant, not a smarter formula.
+
+---
+
+## Correction: the v2 benchmark leaked the reference length (2026-10-09)
+
+The section above reports the v2 run as "10 languages graded, 2 passed, mean
+CER 1.9304". Those numbers were produced by a harness that read the reference.
+
+`benchmark.py` set its generation budget as
+`max(128, min(4096, len(row["text"]) // 2 + 64))` — the length of the held-out
+reference. The harness was therefore choosing how many tokens to allow using the
+answer it was grading. Russian references have a median of 3688 characters, so
+ru was allowed 1908 tokens against the 128 the zero-shot baseline ever had, and
+en, fa and ar were given 6.4x, 3.9x and 4x. Those four numbers are not
+comparable to the baseline that everything else in this file is measured
+against.
+
+fr, de, th, hi and ur are unaffected: their budgets clamp to 128 either way.
+That prediction was checked rather than assumed — the corrected run reproduces
+them exactly (fr 0.1243, de 0.0832, th 3.6725, hi 5.5312, ur 6.2475), so the
+character-balance result stands on its own.
+
+The budget is now a fixed 128 for every language, the value the zero-shot
+baseline used, so the two arms are finally comparable. The paragraph-form
+corpora remain truncated by it. No single fixed budget is fair to both groups —
+measured on the same rows, French is 0.1243 at 128 tokens and 0.8217 at 192,
+while ru/fa/en/ar cannot express their references at 128 at all — so truncation
+is disclosed rather than worked around by reading the reference.
+
+Re-measured on the same held-out `htr/test` shards with the fixed budget:
+
+| language | n | mean CER | zero-shot | run-2 (leaked) | corrected |
+|---|---|---|---|---|---|
+| de German | 40 | 0.0832 | 0.1244 | 0.0832 | 0.0832 |
+| fr French | 40 | 0.1243 | 0.1153 | 0.1243 | 0.1243 |
+| vi Vietnamese | 40 | 0.3763 | 0.3770 | 0.3807 | 0.3763 |
+| fa Persian | 40 | 0.8044 | 0.7976 | 0.8176 | 0.8044 |
+| ar Arabic | 40 | 0.7999 | 0.7961 | 0.9436 | 0.7999 |
+| ru Russian | 40 | 0.9163 | 0.9335 | 0.9825 | 0.9163 |
+| en English | 14 | 0.5506 | 0.5851 | 0.5214 | 0.5506 |
+| th Thai | 40 | 3.6725 | 0.9877 | 3.6725 | 3.6725 |
+| hi Hindi | 40 | 5.5312 | 0.5511 | 5.5312 | 5.5312 |
+| ur Urdu | 40 | 6.2475 | 1.0284 | 6.2475 | 6.2475 |
+
+**Corrected overall: 10 languages graded, 2 passed, mean CER 1.9106,
+verdict FAIL.**
+
+The conclusion is unchanged and is weaker than the section above claimed. The
+character-balanced retrain did recover the line-form languages from the
+row-capped regression (fr 10.97 to 0.1243, de 10.01 to 0.0832) and German does
+beat the zero-shot baseline. But the leaked budget flattered four languages,
+and with it removed Arabic and Persian now sit at their zero-shot values while
+ru, en and vi are within noise of it. Only th, hi and ur remain clearly worse
+than zero-shot, and those are exactly the languages the val probe showed
+failing on their own training rows.
+
+Nothing here beats the zero-shot benchmark. The leaning out is that the corpus
+rebalancing was necessary and correct — it undid real damage — but it was never
+sufficient on its own, and the earlier section overstated what it bought.
+
+A harness is a verifier only while what it grades never informs the grading.
+That property was broken for one run, it was caught by reading the diff rather
+than by the tooling, and the fix is recorded here with both sets of numbers
+rather than by quietly replacing them.
