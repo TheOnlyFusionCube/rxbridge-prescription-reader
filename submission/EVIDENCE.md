@@ -625,18 +625,42 @@ What is still limited, stated plainly:
 - Arabic and Persian are unchanged, and Vietnamese sits at 0.2616, just above
   the bar. Those three are not stop-rule failures.
 
-### Supplementary run at a 1024-token budget
+### Supplementary runs at a 1024-token budget
 
-Because the 128-token cap makes the paragraph-form languages unmeasurable, a
-second declared run at `--max-new-tokens 1024` was executed with the same
-budget applied identically to both arms and never tuned against the test
-shards. It exists to make ru/en/fa/ar measurable at all, not to chase a pass:
-the token budget is not something these languages lack, and it is reported
-separately precisely so it cannot be confused with the headline result above.
+Because the 128-token cap makes the paragraph-form languages unmeasurable, the
+budget was made an explicit `--max-new-tokens` flag (default 128) at
+`48e0e7a`, roughly two hours before the v4 test numbers existed, so the value
+was declared rather than chosen after seeing a result. The flag exists to make
+ru/en/fa/ar measurable at all, not to chase a pass: the budget is not what
+those languages lack, and both supplementary arms are reported separately so
+they cannot be confused with the headline result above.
 
-The corresponding zero-shot arm at the same budget scored 3 passed, mean
-0.7037 (fr 0.1153, de 0.1244, vi 0.2364). Its per-arm result is in
-`eval/SUPPLEMENTARY_ZS_1024.json`.
+Two arms were run at that budget. **Neither is a v4 measurement, and neither is
+part of the headline 3-of-10 result.**
+
+- **Zero-shot, no adapter:** 3 passed, mean 0.7037
+  (fr 0.1153, de 0.1244, vi 0.2364). In `eval/SUPPLEMENTARY_ZS_1024.json`.
+- **A separately trained EOS adapter from a parallel session, `adapter_v3`,
+  not the `adapter_v4` that produced the table above:** 3 passed, mean 0.6757
+  (de 0.0612, fr 0.0768, th 0.1867, then vi 0.3285, en 0.3559, hi 0.4229,
+  ur 0.8057, ru 0.8071, fa 1.4803, ar 2.2318). In
+  `eval/SUPPLEMENTARY_TRAINED_1024.json`. Same training recipe and seed as v4
+  and differing only in being a separate run, but the checksums differ and it
+  must not be read as a v4 result.
+
+The one thing these two runs establish, and the reason they are worth keeping,
+is about the harness rather than the model. Russian moves from 0.9233 at 128
+tokens to 0.8153 zero-shot and 0.8071 on `adapter_v3` at 1024 tokens. It does
+not clear the bar at either budget, so Russian is not going to pass — but it is
+not purely a quality failure either, since a real fraction of its error was the
+cap. Arabic is the opposite and more informative: it gets *worse* with room
+(0.7917 at 128 tokens to 2.2318 at 1024), which is the ramble signature
+surviving a budget increase. So the 128-token ceiling should be read as
+understating ru and en, overstating nothing, and leaving ar/fa/ur as genuine
+model failures.
+
+Neither supplementary arm changes the verdict, and neither is counted in the
+3-of-10 headline.
 
 ### Status of the multilingual claim
 
