@@ -1,6 +1,13 @@
 # RxBridge — verified evidence base for the Devpost submission
 
-Every number below was measured in this repo, not estimated.
+Every number below was measured in this repo, not estimated, and each one names
+the artifact or command that produced it. Two early figures are the exception
+and are called out here because they are not labelled at their point of use:
+the docTR char-F1 of 0.3076 and the TrOCR CER of 0.9486 were measured in an
+earlier session whose eval harness is not in this repository. The four fixtures
+they were scored against are still in `fixtures_real/`, but nothing here
+re-derives those two numbers, so they rest on that earlier run rather than on
+anything a judge can re-execute.
 
 ## Measured OCR performance (orchestrator-verified, real photographs)
 Fixture set: 4 real prescription photographs downloaded from Wikimedia Commons
