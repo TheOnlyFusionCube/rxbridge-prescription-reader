@@ -1448,3 +1448,109 @@ gets 3,200 rows instead of 1,500, and if Thai regresses past 0.25 this run will
 have bought Hindi's shot with Thai's pass, which is the same trade retrain B
 made in the other direction. That is a real possibility, not a rhetorical one,
 and it is stated here before the measurement rather than after it.
+
+
+---
+
+## The row cap: measured (2026-10-11)
+
+Declared above, then run. adapter_v8 is retrain A's exact configuration with
+`--per-lang 3200` and nothing else; the corpus is the one the IAM section left
+behind, and en's test/val shards are still the restored originals. Both arms
+use the declared penalties.
+
+Held-out htr/test, 40 rows per language, 128 tokens with penalties, v8 against
+v7 (the clean single-variable comparison, since only the row cap differs):
+
+| language | v5 | v7 | v8 | verdict |
+|---|---|---|---|---|
+| de German | 0.0418 | 0.0473 | 0.0621 | **PASS** |
+| fr French | 0.0777 | 0.0953 | 0.0744 | **PASS** |
+| th Thai | 0.1632 | 0.1852 | 0.2079 | **PASS** |
+| vi Vietnamese | 0.1945 | 0.2093 | 0.2335 | **PASS** |
+| hi Hindi | 0.4184 | 0.3376 | 0.3376 | fail |
+| en English | 0.5926 | 0.6010 | 0.5499 | fail |
+| fa Persian | 0.7751 | 0.7716 | 0.7889 | fail |
+| ar Arabic | 0.7140 | 0.7258 | 0.7447 | fail |
+| ur Urdu | 0.7967 | 0.8103 | 0.8109 | fail |
+| ru Russian | 0.9111 | 0.9160 | 0.9162 | fail |
+
+**Overall: 4 passed, mean CER 0.4726 against v7's 0.4699 and v5's 0.4682.
+Verdict FAIL.** Scrubbed per-row data in `eval/BENCHMARK_V8_PENAL.json`.
+
+Hindi did not move. It is 0.3376 against v7's 0.3376, identical to four
+decimals, and 0.3376 again at 1024 tokens -- the same score on the same 40 rows
+at both budgets, which means the model emits the same answers for Hindi whether
+it saw 1,500 Hindi rows or 3,200 of them. The lever aimed at the closest
+failing language moved it by zero.
+
+The reason is in the corpus rather than the trainer, and it is the finding that
+actually matters. The Hindi source is the "multi-lingual" dataset the download
+log recorded as `ml OK 1325.9 MB tahirkiller/multi-lingual-handwritten-ocr-dataset`,
+and its annotation rows carry `"font": "DejaVuSans.ttf"` and `"font_size": 34`
+-- it is rendered text, not handwriting. Hindi's 3,200 rows are 65,317 characters
+of the same font at the same size with different strings. A row cap that
+uncapped 1,700 more of those rows gave the model more strings in a distribution
+it already had 31,341 characters of, and the score confirms that bought nothing.
+The binding constraint on Hindi was never the row count; it is that the corpus
+contains no handwritten Hindi at all.
+
+What the extra rows did buy was English's best number at this budget, 0.5499
+against v7's 0.6010 and v5's 0.5926. That is real and it is the second time an
+English move has shown up, and it still fails by 0.30. French improved to
+0.0744, its best since the EOS fix. Both gains are consistent with the declared
+mechanism: line-form languages got more gradient.
+
+The cost came out of the same place the declaration predicted. Thai went
+0.1852 to 0.2079 and Vietnamese 0.2093 to 0.2335, the latter now 0.017 from the
+bar, and German 0.0473 to 0.0621. Thai did not lose its pass, so the worst case
+named in the declaration did not occur, but the headroom that made Thai a safe
+pass at 35% is down to 17%. Arabic and Persian also drifted the wrong way.
+
+At the 1024-token budget the drift becomes a regression for the paragraph-form
+languages:
+
+| language | v5 | v7 | v8 | verdict |
+|---|---|---|---|---|
+| de German | 0.0418 | 0.0473 | 0.0621 | **PASS** |
+| fr French | 0.0777 | 0.0953 | 0.0744 | **PASS** |
+| th Thai | 0.1632 | 0.1852 | 0.2079 | **PASS** |
+| vi Vietnamese | 0.1313 | 0.1376 | 0.1755 | **PASS** |
+| hi Hindi | 0.4184 | 0.3376 | 0.3376 | fail |
+| en English | 0.5867 | 0.4369 | 0.4389 | fail |
+| fa Persian | 0.7027 | 0.6372 | 0.8900 | fail |
+| ar Arabic | 0.6168 | 0.5725 | 0.6872 | fail |
+| ur Urdu | 0.8107 | 0.8103 | 0.8109 | fail |
+| ru Russian | 0.8025 | 0.8102 | 0.8157 | fail |
+
+**Overall: 4 passed, mean CER 0.4500 against v7's 0.4070 and v5's 0.4338.
+Verdict FAIL.** Scrubbed per-row data in `eval/BENCHMARK_V8_PENAL_1024.json`.
+
+Persian at 0.8900 is the worst Persian in the campaign and Arabic at 0.6872 is
+worse than both earlier models, so the larger budget now hurts two languages
+instead of helping them, where under v7 the same budget produced the campaign's
+best mean of 0.4070. The extra line-form rows took gradient from the
+paragraph-form languages that the budget was being spent on.
+
+One oddity recorded rather than smoothed over. The inline val eval showed Urdu
+collapsing from 0.8312 to 2.4616 -- the model stopped being able to fit Urdu's
+own training rows -- yet held-out Urdu is 0.8109 against v5's 0.8103. The val
+collapse did not transfer to unseen rows, and since val is training data the
+honest reading is that v8 stopped memorising Urdu without generalising any
+worse. It is a sign the row redistribution destabilised a language's fit, and
+it is worth knowing it does not show up on the metric that counts.
+
+So the row cap was a real lever that had never been pulled, it moved two
+languages in the right direction, and it closed no gap. The standing is
+unchanged: 4 of 10 languages pass, best model is adapter_v5 at 0.4682 on the
+declared arm, verdict FAIL.
+
+That is five distinct levers now measured and spent: generation budget,
+decode-time penalties, prompt wording, per-language character volume, and the
+per-language row count. The two runs that moved the scoreboard were the EOS
+stop-rule fix and the character-balanced corpus, both of which predate this
+stretch of work. What remains is not a knob on this trainer. Hindi's corpus is
+rendered text, English's is 74 paragraph rows against a line-crop public set,
+five languages are empty directories, and Russian and Persian have 12.8M and
+3.5M characters available and saturate at 200k without moving -- which is
+capacity for those scripts, not anything a flag can reach.
