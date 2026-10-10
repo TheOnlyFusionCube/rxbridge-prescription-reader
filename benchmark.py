@@ -85,7 +85,9 @@ def build_split(root: str, seed: int = 0, per_lang: int = 40) -> dict[str, list[
     return out
 
 
-def run_benchmark(model_id, adapter, data_root, per_lang, device, out_path, max_new_tokens=128):
+def run_benchmark(model_id, adapter, data_root, per_lang, device, out_path,
+                  max_new_tokens=128, repetition_penalty=1.0,
+                  no_repeat_ngram_size=0):
     import torch
     from PIL import Image
     from transformers import AutoModelForImageTextToText, AutoProcessor
@@ -136,7 +138,10 @@ def run_benchmark(model_id, adapter, data_root, per_lang, device, out_path, max_
             )
             enc = processor(text=text, images=[image], return_tensors="pt").to(device)
             with torch.no_grad():
-                out = model.generate(**enc, max_new_tokens=budget, do_sample=False)
+                out = model.generate(**enc, max_new_tokens=budget,
+                                     do_sample=False,
+                                     repetition_penalty=repetition_penalty,
+                                     no_repeat_ngram_size=no_repeat_ngram_size)
                 prediction = processor.batch_decode(
                     out[:, enc["input_ids"].shape[-1] :], skip_special_tokens=True
                 )[0]
@@ -198,6 +203,13 @@ def main():
     ap.add_argument("--data-root", default="htr")
     ap.add_argument("--per-lang", type=int, default=40)
     ap.add_argument("--max-new-tokens", type=int, default=128)
+    # Decode-time stall penalties, both defaulting to the no-op that every
+    # earlier run in EVIDENCE.md used, so those numbers stay reproducible.
+    # Declared here before any test-shard number was looked at: the values were
+    # chosen on the val shards (training data, see scripts/decode_probe.py), not
+    # by watching this benchmark's test scores.
+    ap.add_argument("--repetition-penalty", type=float, default=1.0)
+    ap.add_argument("--no-repeat-ngram-size", type=int, default=0)
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out", default="eval/BENCHMARK.json")
     args = ap.parse_args()
@@ -205,6 +217,7 @@ def main():
     summary = run_benchmark(
         args.model, args.adapter or None, args.data_root,
         args.per_lang, args.device, args.out, args.max_new_tokens,
+        args.repetition_penalty, args.no_repeat_ngram_size,
     )
     sys.exit(0 if summary["verdict"] == "PASS" else 1)
 
