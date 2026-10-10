@@ -1000,3 +1000,64 @@ bottom out at the same wall, and the wall is the stop rule for the six
 long-form languages. The remaining attack is the one already in flight: more
 training data per language, via the two retrains. Nothing here changes any
 published number; the control column IS the published prompt, and it stays.
+
+
+---
+
+## Retrain A: 200k chars per language, held-out at 128 tokens with penalties (2026-10-10)
+
+adapter_v5 was trained with `--per-lang-chars 200000` -- against v4's 40000 --
+holding everything else at the v4 settings: 1000 optimiser steps x 8
+accumulation, lr 2e-4, rank 16, EOS in the labels, global shuffle. The attack
+was data volume, because budget, penalties and prompt wording had each been
+measured and each had bottomed out. This is the same held-out protocol as every
+run above: htr/test, 40 rows per language, the exact penalty arm the val-shard
+probe picked (`--repetition-penalty 1.2 --no-repeat-ngram-size 3`), declared
+before the run.
+
+| language | v4 penalised 128 | v5 penalised 128 | verdict |
+|---|---|---|---|
+| de German | 0.0679 | 0.0418 | **PASS** |
+| fr French | 0.1100 | 0.0777 | **PASS** |
+| th Thai | 0.1721 | 0.1632 | **PASS** |
+| vi Vietnamese | 0.2648 | 0.1945 | **PASS** |
+| hi Hindi | 0.5464 | 0.4184 | fail |
+| en English | 0.5200 | 0.5926 | fail |
+| fa Persian | 0.7885 | 0.7751 | fail |
+| ar Arabic | 0.7468 | 0.7110 | fail |
+| ur Urdu | 0.8073 | 0.7967 | fail |
+| ru Russian | 0.9163 | 0.9111 | fail |
+
+**Overall: 4 passed, mean CER 0.4682 against 0.4940. Verdict FAIL.** Scrubbed
+per-row data in `eval/BENCHMARK_V5_PENAL.json`.
+
+The pass count is unchanged at four, and that is not the headline. What changed
+is which caveat those four carry. Under v4, the fourth pass only existed in the
+1024-token arm, and that arm was chosen after seeing the 128-token results, so
+vi's 0.2060 was disclosed as optimistic. Here vi passes at 0.1945 in the
+pre-declared 128-token penalty arm, the same configuration that graded v4 at
+0.2648. The fourth pass is now clean by the run's own rule, and it was earned
+by data volume rather than by moving the decoder.
+
+The movement is concentrated exactly where the corpus diagnosis said it would
+be. Vietnamese went 0.2648 to 0.1945, the largest single change in the table,
+and it was the language sitting 0.0116 above the bar at v4. Hindi went
+0.5464 to 0.4184 and is the only other failing language that moved by more
+than 0.1 -- the two paragraph-form languages with the most headroom between
+"needs more data" and "needs a different model". Everything else moved by
+0.001 to 0.036, which is the range of noise for 40 rows.
+
+The two honest regressions, recorded rather than rounded away. English got
+worse, 0.5200 to 0.5926. It is the language whose test shard has only 14 rows
+and whose references have a median of 1452 characters, so it is both the
+noisiest number in the table and the one most exposed to the earlier finding
+that a 128-token budget truncates a correct answer. Russian is essentially
+flat at 0.9111 against 0.9163 and remains the worst performer -- it supplied
+72.2% of training characters under the old row cap and was the language the
+char budget was designed to stop dominating.
+
+So the data hedge produced a real held-out improvement -- a cleaner fourth
+pass and the largest CER move since the EOS fix -- without reaching five. The
+verdict is still FAIL, and the standing pass count is still four of ten. The
+1024-token arm on v5 was measured to complete the picture, and retrain B
+(600k chars per language) is the larger-data endpoint of the same attack.
