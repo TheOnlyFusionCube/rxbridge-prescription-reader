@@ -7,7 +7,7 @@ virtualenv, which pins the versions that load the docTR and DistilBERT
 checkpoints:
 
 ```bash
-.venv/bin/python -m pytest tests/ -q      # 96 tests
+.venv/bin/python -m pytest tests/ -q      # 98 tests
 .venv/bin/python -m uvicorn app.main:app --port 8000
 ```
 

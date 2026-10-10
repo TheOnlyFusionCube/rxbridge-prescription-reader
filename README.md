@@ -28,7 +28,7 @@ to do.
 
 ## Status
 
-- `tests/` — 96 tests (69 contract, 12 API, 13 attribution, 2 API attribution).
+- `tests/` — 98 tests (69 contract, 14 API, 13 attribution, 2 EOS-label).
   The API tests import docTR, so they run under `.venv`, not the system Python.
   See `CONTRIBUTING.md`.
 - `web/` — Next.js PWA, builds clean, 105-108 kB first-load JS.
