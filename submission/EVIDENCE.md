@@ -397,13 +397,15 @@ held-out `htr/test` shards, same 0.25 bar. Result on the held-out test set:
 
 ### What the fix did and did not achieve
 
-The character cap repaired the regression completely. Against the row-capped
-run, every language improved: French 10.9668 → 0.1243, German 10.0057 →
-0.0832, Thai 9.7451 → 3.6725, Hindi 13.4258 → 5.5312, Urdu 5.9927 → 6.2475.
-Mean CER fell 5.3833 → 1.9304. The two languages that passed zero-shot pass
-again, and German now clears the bar *better* than the zero-shot baseline did
-(0.1244 → 0.0832), so the fine-tune did add real transcription ability where
-the corpus supports it.
+The character cap repaired the regression substantially. Against the row-capped
+run, six languages improved sharply — French 10.9668 → 0.1243, German 10.0057 →
+0.0832, Thai 9.7451 → 3.6725, Hindi 13.4258 → 5.5312, English 0.6511 → 0.5214,
+Vietnamese 0.4401 → 0.3807 — while four moved slightly in the wrong direction
+(Persian 0.7865 → 0.8176, Russian 0.9395 → 0.9825, Arabic 0.8798 → 0.9436,
+Urdu 5.9927 → 6.2475). Mean CER fell 5.3833 → 1.9304. The two languages that
+passed zero-shot pass again, and German now clears the bar *better* than the
+zero-shot baseline did (0.1244 → 0.0832), so the fine-tune did add real
+transcription ability where the corpus supports it.
 
 Against zero-shot the picture is mixed and is recorded as such. Only German
 improved on the held-out test set: 0.1244 zero-shot → 0.0832 trained. French is
