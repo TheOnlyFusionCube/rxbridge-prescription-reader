@@ -24,7 +24,11 @@ from pathlib import Path
 # character-classification metadata with no images; Korean ships 53 polygon
 # regions inside 5 images, too few for a split.
 SOURCES: dict[str, list[tuple[str, str]]] = {
-    "en": [("ml/amr", "amr")],
+    # en had 74 rows (53 train), the one graded language not supply-saturated.
+    # IAM pairs are line-granular while the en test shard is paragraph form, so
+    # this buys script reading, not paragraph structure; test/val are restored
+    # byte-identical after the build so the verifier is unchanged.
+    "en": [("ml/amr", "amr"), ("fresh/iam_voxel", "iam_voxel")],
     "fr": [("ml/rimes_fr", "parquet")],
     "th": [("htr/th", "parquet")],
     "ar": [("htr/ar", "parquet")],
@@ -222,6 +226,31 @@ def read_ko(root: Path, cache: dict):
             yield {"image": str(jpg), "text": text}
 
 
+def read_iam_voxel(root: Path, cache: dict):
+    """Voxel51 IAM line set: samples.json pairs data/NNNNN.png with a transcript.
+
+    English had 74 rows in total -- 53 of them train -- against 3000+ for every
+    other graded language, so the language could not be learned however the
+    decoder was tuned. This source adds ~5,600 labeled images of English
+    handwriting. It is line-granular while the en test shard is paragraph form,
+    which is a disclosed mismatch and not a like-for-like addition: it buys the
+    model a chance to read English script, it does not buy it paragraph
+    structure. Wherever an en result uses this source, that is stated.
+    """
+    meta = root / "samples.json"
+    if not meta.exists():
+        return
+    payload = json.loads(meta.read_text(encoding="utf-8"))
+    for item in payload.get("samples", []):
+        rel = str(item.get("filepath", ""))
+        text = str(item.get("assistant", "")).strip()
+        if not rel or not text:
+            continue
+        img = root / rel
+        if img.exists():
+            yield {"image": str(img), "text": text}
+
+
 def read_csv(root: Path, cache: dict):
     """CSV with image path + text columns."""
     for csv_file in sorted(root.rglob("*.csv")):
@@ -417,6 +446,7 @@ READERS = {
     "auto": read_auto,
     "ur_tgz": read_ur_tgz,
     "hi_zip": read_hi_zip,
+    "iam_voxel": read_iam_voxel,
 }
 
 
