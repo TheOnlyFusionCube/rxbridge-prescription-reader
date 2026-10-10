@@ -110,17 +110,19 @@ def run_benchmark(model_id, adapter, data_root, per_lang, device, out_path):
             continue
         cers: list[float] = []
         hits = 0
-        # Generation budget must scale with the reference. A fixed 128 tokens
-        # covers ~380 characters, which silently truncates the paragraph-form
-        # corpora: ru references have a median of 3688 chars, fa 1041 and en 1460.
-        # Measured on the first trained run, ru median prediction was 267 chars
-        # against a 3688-char reference and 40 of 40 predictions fell below the
-        # cap, so that language's reported CER is a truncation floor rather than a
-        # transcription result. The scale keeps short references at 128 (those
-        # languages already ramble well past their reference, so raising their
-        # budget would only widen the gap) and gives long references room to finish.
+        # One fixed budget for every language, and it must not depend on the
+        # reference. An earlier version scaled the budget by len(row["text"]),
+        # which handed the harness the answer length: ru/fa/en/ar were given
+        # 4-15x more tokens than the zero-shot baseline had, chosen using the
+        # ground truth. That is leakage, and it invalidated the comparison.
+        #
+        # 128 tokens is kept because it is what the zero-shot baseline used, so
+        # this is the only value that makes the two arms comparable. It truncates
+        # the paragraph-form corpora (ru refs median 3688 chars) - that is a
+        # known, reported limitation of the harness, not something to hide by
+        # reading the reference.
+        budget = 128
         for row in rows:
-            budget = max(128, min(4096, len(row["text"]) // 2 + 64))
             image = Image.open(row["image"]).convert("RGB")
             messages = [{
                 "role": "user",
