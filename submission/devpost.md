@@ -29,7 +29,7 @@ Real photograph evidence, curated with vision and scored (see `EVIDENCE.md`):
 
 | engine | result on 4 real photos |
 |---|---|
-| docTR 1.0.1 (chosen) | 0.3076 char-F1 — reads the printed scaffolding at ~0.99, fails on the cursive |
+| docTR 1.0.1 (chosen) | 0.3076 char-F1 — reads printed scaffolding at 0.84-0.99 confidence, fails on the cursive |
 | tesseract 4.1.1 | similar, weaker |
 | EasyOCR 1.7.2 | degrades further on degraded photos and French |
 

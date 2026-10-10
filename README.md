@@ -17,7 +17,7 @@ photo -> docTR (detect + recognise) -> DistilBERT slot tagger (trained by us)
 
 `src/ocr.py` decodes the upload in memory and hands docTR raw bytes, so no image
 is ever written to disk. DocTR reads printed scaffolding (form titles, dates,
-numerals) at ~0.99 confidence and fails on cursive handwriting; the slot tagger
+numerals) at 0.84-0.99 confidence and fails on cursive handwriting; the slot tagger
 recovers structure from the text that survives.
 
 Every field the API returns is attributed: `src/explain.py` reports which source
