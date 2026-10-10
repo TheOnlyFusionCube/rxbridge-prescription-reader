@@ -588,7 +588,7 @@ the only variable between them.
 
 ### Result on the held-out test shards, fixed 128-token budget
 
-| language | n | mean CER | median | exact | zero-shot | v3 (no stop rule) |
+| language | n | mean CER | median | exact | zero-shot | `adapter_v2` (no EOS) |
 |---|---|---|---|---|---|---|
 | de German | 40 | **0.0673** | 0.0000 | 0.57 | 0.1244 | 0.0832 |
 | fr French | 40 | **0.1092** | 0.0159 | 0.47 | 0.1153 | 0.1243 |
