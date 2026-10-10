@@ -784,3 +784,64 @@ So ~0.99 was one line, not the printed half generally. Both files now state
 0.84-0.99, which is the measured range. The corrected claim survives: docTR
 handles the printed half and fails on the cursive, which is what the 0.3076
 char-F1 and the `Mletzina 20` substitution show.
+
+---
+
+## The EOS-fixed model measured at a 1024-token budget (2026-10-10)
+
+`adapter_v4` -- the model the EOS stop-rule fix produced -- was measured at a
+1024-token budget, the same pre-declared budget the supplementary zero-shot run
+used, so the comparison is arm-for-arm. Held-out `htr/test`, 40 rows per
+language, identical to every other run in this file.
+
+| language | n | CER @128 | CER @1024 | verdict |
+|---|---|---|---|---|
+| de German | 40 | 0.0673 | 0.0673 | **PASS** |
+| fr French | 40 | 0.1092 | 0.1092 | **PASS** |
+| th Thai | 40 | 0.1629 | 0.1629 | **PASS** |
+| en English | 14 | 0.5816 | 0.4351 | fail |
+| hi Hindi | 40 | 0.5352 | 0.5352 | fail |
+| vi Vietnamese | 40 | 0.2616 | 0.6013 | fail |
+| ru Russian | 40 | 0.9233 | 0.8115 | fail |
+| fa Persian | 40 | 0.8011 | 1.4822 | fail |
+| ar Arabic | 40 | 0.7917 | 2.1959 | fail |
+| ur Urdu | 40 | 1.0449 | 3.2033 | fail |
+
+**Overall: 3 passed, mean CER 0.9604 at 1024 tokens against 0.5279 at 128.**
+Scrubbed per-row data in `eval/BENCHMARK_V4_1024.json`; the raw output was
+deleted after scrubbing rather than kept.
+
+### What this run settles
+
+The budget was **not** what held the failing languages back, which was the
+hypothesis this run was launched to test. The pass set is identical at both
+budgets -- de, fr, th clear the bar either way -- and every other language
+still fails at 1024.
+
+Only English genuinely improved, 0.5816 to 0.4351, and it is the clearest
+remaining case of the 128-token ceiling truncating an answer: its references
+have a median of 1452 characters, which 128 tokens cannot express. That part of
+the earlier reading stands. English is still not passing.
+
+The line-form languages that already fit in 128 tokens did not move at all.
+Hindi is byte-identical at both budgets, which is what a reference with a
+median of 11 characters should do when the budget stops being the binding
+constraint.
+
+Every language that got worse did so because more room lets it run longer.
+Arabic went 0.7917 to 2.1959, Urdu 1.0449 to 3.2033, Persian 0.8011 to 1.4822,
+Vietnamese 0.2616 to 0.6013. Vietnamese is the sharpest illustration: at 128
+tokens it sat 0.0116 above the bar, and the budget increase pushed it 0.34
+further away rather than over. That is the same rambling behaviour the EOS fix
+addressed for Thai, surviving at high budgets for scripts where the stop rule
+did not fully take.
+
+So the residual gap for ru, fa, ar, ur, vi and hi is not the harness ceiling
+and not corpus weighting. It is that the model still fails to stop, and more
+generation budget converts that into a larger number rather than a better one.
+The next lever is strengthening the stop signal itself -- more optimiser steps,
+or a decode-time repetition/stall penalty applied identically to both arms and
+declared before the run -- not a larger token budget.
+
+Neither budget changes the headline: 3 of 10 languages pass and the verdict is
+FAIL.
