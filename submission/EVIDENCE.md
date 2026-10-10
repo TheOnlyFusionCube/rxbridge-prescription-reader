@@ -682,3 +682,46 @@ corpus was so imbalanced that the first fine-tune destroyed performance; fixing
 the weighting stopped the damage; and the missing end token in the labels was
 what was actually preventing the model from stopping. The last one was a
 five-line fix that produced the only real gain of the three.
+
+---
+
+## End-to-end verification on a printed prescription (re-measured 2026-10-09)
+
+`README.md` and `submission/devpost.md` both state a printed-prescription
+result and then point here. The numbers lived only in `devpost.md`, with no
+verification behind them, so they were re-derived by running the pipeline.
+
+Measured with `scripts/run_api.sh` under `.venv` (docTR 1.0.1, DistilBERT
+tagger), `POST /extract` with `fixtures_real/printed_full.jpg`, graded against
+`fixtures_real/printed_full_gt.json`:
+
+| claim | measured |
+|---|---|
+| OCR lines | 20 of 20, confidence 0.8356 to 0.9933 |
+| drugs extracted | 3 of 3, matching the ground truth by name, dose and frequency |
+| drug-level confidence | 0.6125, 0.6550, 0.6333 |
+| overall confidence | 0.6336 |
+| duration | recovered for 1 of 3 (Amoxicillin, 10 days); the other two null |
+| warnings | none |
+
+The three extracted drugs are Amoxicillin 500 mg twice daily, Paracetamol
+500 mg every 8 hours as needed, and Omeprazole 20 mg once daily, which is what
+the ground truth states. No case is populated that the form does not support.
+
+Two corrections to what `devpost.md` previously claimed, both now applied
+there and in `README.md`:
+
+1. "0.87-0.99 confidence" was wrong at the floor. The measured minimum is
+   0.8356, which rounds to 0.84. The upper bound and the 20/20 count are
+   correct.
+2. "3/3 drugs extracted with dose, frequency, day-grid times and duration"
+   read as duration for all three. Only Amoxicillin carries a duration, because
+   it is the only one the form gives one; the other two return null. The API is
+   declining to guess rather than failing to extract, so this is stated as the
+   measured scope instead of the fuller-sounding original.
+
+Reproduce:
+
+    bash scripts/run_api.sh
+    curl -s -X POST http://127.0.0.1:8010/extract \
+      -F "image=@fixtures_real/printed_full.jpg"
