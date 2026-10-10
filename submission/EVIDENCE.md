@@ -845,3 +845,60 @@ declared before the run -- not a larger token budget.
 
 Neither budget changes the headline: 3 of 10 languages pass and the verdict is
 FAIL.
+
+
+---
+
+## Decode-time stall penalties on the EOS-fixed model (2026-10-10)
+
+The section above names a decode-time repetition/stall penalty as the next lever.
+That was tested, and this is the pre-declared version of it: the penalty values
+were committed to benchmark.py (64cbfeb) before any test-shard number was
+looked at, so the ordering is declared-then-measured rather than the reverse.
+
+Choosing the values was done on the val shards, which are training data
+(load_rows reads train+val). That limitation is disclosed rather than buried:
+val can show a penalty does not hurt, but it cannot prove a held-out gain. It
+was optimistic -- val said vi would land at 0.2415, below the bar; held-out it
+came in at 0.2648, above it. `scripts/decode_probe.py` holds the probe.
+
+Held-out htr/test, 40 rows per language, 128-token budget, adapter_v4:
+
+| language | unpenalised | penalised | verdict |
+|---|---|---|---|
+| de German | 0.0673 | 0.0679 | **PASS** |
+| fr French | 0.1092 | 0.1100 | **PASS** |
+| th Thai | 0.1629 | 0.1721 | **PASS** |
+| vi Vietnamese | 0.2616 | 0.2648 | fail |
+| fa Persian | 0.8011 | 0.7885 | fail |
+| ar Arabic | 0.7917 | 0.7468 | fail |
+| hi Hindi | 0.5352 | 0.5464 | fail |
+| ur Urdu | 1.0449 | 0.8073 | fail |
+| ru Russian | 0.9233 | 0.9163 | fail |
+| en English | 0.5816 | 0.5200 | fail |
+
+**Overall: 3 passed, mean CER 0.4940 against 0.5279 unpenalised.** Scrubbed
+per-row data in `eval/BENCHMARK_PENAL.json`.
+
+The mean improves but the passes do not move, which is the distinction this
+benchmark exists to make. The objective is not mean CER -- it is every language
+clearing 0.25 -- so a lower average that leaves three languages failing is not
+progress by the run's own rule.
+
+Where the improvement comes from is the long-form languages, not the ones near
+the bar. English, Arabic, Persian, Urdu and Russian all improve, because the
+penalty shortens the run-on answers that inflated them. The languages that were
+close to passing move the wrong way: vi 0.2616 to 0.2648, th 0.1629 to 0.1721,
+hi 0.5352 to 0.5464. Penalising repetition costs accuracy on the short
+references where the answer is right and must not be trimmed.
+
+So the penalty is a net negative for the objective. It helps the languages that
+are far from passing and slightly hurts the ones closest, which is the opposite
+of what was wanted. Both earlier conclusions it contradicts are worth stating:
+against adapter_v2 the penalty cost 2.6x and was rightly rejected; here it does
+not destroy the run, because the EOS fix already stopped the runaway repetition
+the penalty was invented to suppress. It is now unnecessary rather than
+harmful, and the stop-rule fix is what did the real work.
+
+The flags remain in benchmark.py at no-op defaults so the numbers above and
+every earlier result stay reproducible.
