@@ -725,3 +725,32 @@ Reproduce:
     bash scripts/run_api.sh
     curl -s -X POST http://127.0.0.1:8010/extract \
       -F "image=@fixtures_real/printed_full.jpg"
+
+---
+
+## Web frontend build and bundle size (verified 2026-10-09)
+
+`README.md` status line claims the Next.js PWA "builds clean, 105-108 kB
+first-load JS". Verified against a fresh build rather than the stale `.next`
+directory already on disk:
+
+    cd web && ./node_modules/.bin/next build
+
+Result: compiled successfully, types checked, 4 static pages generated, no
+warnings or errors. Next.js's own report:
+
+| route | First Load JS |
+|---|---|
+| `/` | 108 kB |
+| `/_not-found` | 106 kB |
+| shared by all routes | 105 kB |
+
+So the claimed range is exact: 105 kB is the shared floor and 108 kB the root
+route ceiling, both as reported gzipped by Next.js itself.
+
+Two earlier hand-computations from the stale build chunks were wrong, for
+different reasons, and neither is kept. Summing `rootMainFiles` plus the `/page`
+entry gave 208.4 kB because that entry already repeats the shared chunks, so the
+shared ones were counted twice; a separate sum that added `polyfills` and
+`framework` as well gave 233 kB and over-counted those too. Next.js's own report
+is the source of truth here, not the chunk arithmetic.
