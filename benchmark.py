@@ -85,7 +85,7 @@ def build_split(root: str, seed: int = 0, per_lang: int = 40) -> dict[str, list[
     return out
 
 
-def run_benchmark(model_id, adapter, data_root, per_lang, device, out_path):
+def run_benchmark(model_id, adapter, data_root, per_lang, device, out_path, max_new_tokens=128):
     import torch
     from PIL import Image
     from transformers import AutoModelForImageTextToText, AutoProcessor
@@ -116,12 +116,12 @@ def run_benchmark(model_id, adapter, data_root, per_lang, device, out_path):
         # 4-15x more tokens than the zero-shot baseline had, chosen using the
         # ground truth. That is leakage, and it invalidated the comparison.
         #
-        # 128 tokens is kept because it is what the zero-shot baseline used, so
-        # this is the only value that makes the two arms comparable. It truncates
-        # the paragraph-form corpora (ru refs median 3688 chars) - that is a
-        # known, reported limitation of the harness, not something to hide by
-        # reading the reference.
-        budget = 128
+        # The budget is a single value passed on the command line, identical
+        # for every language and every row in the run. The 128-token headline
+        # is what the zero-shot baseline used, so that remains the default;
+        # a supplementary run at 1024 is declared in advance and used
+        # identically for both arms, never tuned against the test shards.
+        budget = max_new_tokens
         for row in rows:
             image = Image.open(row["image"]).convert("RGB")
             messages = [{
@@ -197,13 +197,14 @@ def main():
     ap.add_argument("--adapter", default="")
     ap.add_argument("--data-root", default="htr")
     ap.add_argument("--per-lang", type=int, default=40)
+    ap.add_argument("--max-new-tokens", type=int, default=128)
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out", default="eval/BENCHMARK.json")
     args = ap.parse_args()
 
     summary = run_benchmark(
         args.model, args.adapter or None, args.data_root,
-        args.per_lang, args.device, args.out,
+        args.per_lang, args.device, args.out, args.max_new_tokens,
     )
     sys.exit(0 if summary["verdict"] == "PASS" else 1)
 
