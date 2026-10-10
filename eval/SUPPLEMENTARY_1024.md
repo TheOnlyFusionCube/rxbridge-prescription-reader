@@ -64,15 +64,18 @@ Both arms FAIL the all-languages bar; the harness verdict is unchanged.
 
 Scrubbed per-row {lang, cer} data: `eval/SUPPLEMENTARY_ZS_1024.json`,
 `eval/SUPPLEMENTARY_TRAINED_1024.json` (374 rows each, same scrub as
-`eval/BENCHMARK_V2.json`). Raw benchmark output containing reference and
-prediction text stays on the cluster at /tmp and is not committed.
+`eval/BENCHMARK_V2.json`). The raw benchmark output carried per-row reference
+and prediction text and was never committed. It was held on the cluster at
+/tmp during the run and then deleted as part of a PHI pass, so the only
+record of these two runs is the scrubbed data above plus the per-language
+table in this file.
 
 Note on filenames: the adapter arm was first written as
 `SUPPLEMENTARY_EOS_1024.json` and later re-derived from the same cluster output
 under the name `SUPPLEMENTARY_TRAINED_1024.json`, which is the file referenced
 by `submission/EVIDENCE.md`. The two were verified to contain identical
-per-language CER data against the raw `/tmp/bench_eos_1024.json`, and only the
-latter is tracked.
+per-language CER data before that raw output was deleted, and only the latter
+is tracked.
 
 ## Caveats
 
