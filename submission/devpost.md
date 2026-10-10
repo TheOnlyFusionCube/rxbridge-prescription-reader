@@ -84,8 +84,10 @@ Two honest fallbacks keep the service usable rather than broken:
   never a 500, never a traceback.
 
 Verified end to end on a real printed prescription: 20/20 OCR lines at
-0.87–0.99 confidence, 3/3 drugs extracted with dose, frequency, day-grid times
-and duration.
+0.84–0.99 confidence, 3/3 drugs extracted with dose, frequency and day-grid
+times. Duration was recovered for one of the three (Amoxicillin, 10 days); the
+other two are absent from the form's wording and come back null rather than
+guessed.
 
 ## Key Features
 
