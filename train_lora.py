@@ -159,6 +159,12 @@ def collate(processor, row: dict) -> dict | None:
     answer = normalise(row["text"])
     if not answer:
         return None
+    # LFM2.5-VL closes an assistant turn with the EOS token. Without it in the
+    # labels the model never learns a stop rule: th/hi/ur score exact lines and
+    # then ramble (CER 3-6), and ru never terminates at all. Appending the eos
+    # string before tokenising keeps the prompt an exact prefix of the full
+    # sequence, so the prompt-prefix mask below stays correct.
+    answer = answer + processor.tokenizer.eos_token
 
     messages = [{
         "role": "user",
