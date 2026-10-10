@@ -1360,3 +1360,91 @@ six failures are bound by capacity for the saturated scripts (ru, fa, ar
 saturate at 200k and did not move when they got 600k) and by reference form for
 en and hi. The 10-language goal needs corpora that do not exist on disk: five
 languages have zero rows, and English has no paragraph-form data to acquire.
+
+
+---
+
+## The row cap: a lever no run had moved (declared 2026-10-11)
+
+The census above ends by blaming supply, and for Hindi that was the wrong
+diagnosis. It deserves correcting before it is built on.
+
+`load_rows` in train_lora.py caps every language twice. The character cap is
+the one this campaign has measured and tuned, from 40k through 200k to 600k.
+The row cap sits in front of it and no run has ever moved it:
+
+    random.Random(seed).shuffle(found)
+    found = found[:per_lang]        # <-- the row cap, default 1500
+    used = 0
+    kept = []
+    for row in found:               # <-- only then the char cap
+        ...
+
+Counted over the built corpus, train+val, what was actually on disk against
+what `--per-lang 1500` ever let the trainer see:
+
+| language | train+val on disk | rows ever used | rows never used |
+|---|---|---|---|
+| fr French | 3,200 | 1,500 | 1,700 |
+| th Thai | 3,200 | 1,500 | 1,700 |
+| de German | 3,200 | 1,500 | 1,700 |
+| hi Hindi | 3,200 | 1,500 | 1,700 |
+| fa Persian | 3,200 | 1,500 | 1,700 |
+| ru Russian | 3,200 | 1,500 | 1,700 |
+| ur Urdu | 2,203 | 1,500 | 703 |
+| en English | 2,987 | 60 | 2,927 |
+| vi Vietnamese | 944 | 459 | 485 |
+| ar Arabic | 366 | 259 | 107 |
+
+So seven of the ten graded languages have never been trained on more than half
+their rows. Hindi in particular has 3,200 rows and 65,317 characters on disk
+against a 200,000-character cap -- the char cap was never binding on it at all,
+and 1,700 Hindi rows have never been seen by a single run. The census called
+that "limited by supply"; it is limited by a flag nobody touched.
+
+This is also a different direction from the retrain B result, which is what
+makes it worth a run. Retrain B raised the char cap to 600k and that diluted
+toward the paragraph-form languages, because ru, fa, ar and vi are the ones the
+char cap binds -- and it cost Thai its pass. Raising the row cap while holding
+the char cap at 200k does the opposite: the paragraph-form languages cannot use
+more rows, because they are char-capped inside the same 1,500 they already had,
+so the extra rows go entirely to the line-form languages that have them. fr, th,
+de, hi and ur each go from 1,500 rows to every row they own.
+
+Declared before any number: adapter_v8 is retrain A's exact configuration
+(1,000 optimiser steps x 8 accumulation, lr 2e-4, rank 16, EOS in the labels,
+global shuffle, `--per-lang-chars 200000`) with `--per-lang 3200`, the only
+change. Both arms are pre-declared: 128 tokens with the `pen1.2+ngram3` penalty
+arm, and 1024 tokens with the same penalties. No held-out shard number has been
+looked at, and this paragraph is committed before either is run.
+
+The training mix it produces, verbatim from the run's own load_rows output,
+against v5 and v7:
+
+| language | v5 rows | v5 chars | v7 rows | v7 chars | v8 rows | v8 chars |
+|---|---|---|---|---|---|---|
+| en English | 60 | 61,780 | 1,500 | 185,550 | 1,623 | 199,999 |
+| fr French | 1,500 | 69,653 | 1,500 | 69,653 | 3,200 | 148,680 |
+| th Thai | 1,500 | 61,545 | 1,500 | 61,545 | 3,200 | 129,291 |
+| de German | 1,500 | 62,904 | 1,500 | 62,904 | 3,200 | 133,719 |
+| hi Hindi | 1,500 | 31,341 | 1,500 | 31,341 | 3,200 | 65,317 |
+| ur Urdu | 1,500 | 66,117 | 1,500 | 66,117 | 2,203 | 97,020 |
+| ar Arabic | 259 | 199,999 | 259 | 199,999 | 259 | 199,999 |
+| fa Persian | 194 | 199,649 | 194 | 199,649 | 194 | 199,649 |
+| ru Russian | 52 | 197,822 | 52 | 197,822 | 52 | 197,822 |
+| vi Vietnamese | 459 | 199,982 | 459 | 199,982 | 459 | 199,982 |
+| total | 8,524 | 1,150,792 | 9,964 | 1,274,562 | 17,590 | 1,571,478 |
+
+Hindi's training characters go 31,341 to 65,317, a 2.08x raise, and its share of
+all training characters goes 2.7% to 4.2%. Urdu goes 1.47x in rows and 5.7% to
+6.2% in share. The four char-capped languages are byte-identical to v7, which is
+what makes the comparison clean: v8 against v7 changes one thing only, the row
+cap. v8 against v5 changes two, because IAM is still in the corpus, and that
+comparison is reported second for that reason.
+
+The risk is named in advance rather than discovered afterward. Thai passed at
+0.1632 on 1,500 rows and retrain B showed what dilution does to it. Thai now
+gets 3,200 rows instead of 1,500, and if Thai regresses past 0.25 this run will
+have bought Hindi's shot with Thai's pass, which is the same trade retrain B
+made in the other direction. That is a real possibility, not a rhetorical one,
+and it is stated here before the measurement rather than after it.
