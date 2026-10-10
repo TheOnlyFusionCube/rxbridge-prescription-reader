@@ -653,11 +653,23 @@ is about the harness rather than the model. Russian moves from 0.9233 at 128
 tokens to 0.8153 zero-shot and 0.8071 on `adapter_v3` at 1024 tokens. It does
 not clear the bar at either budget, so Russian is not going to pass — but it is
 not purely a quality failure either, since a real fraction of its error was the
-cap. Arabic is the opposite and more informative: it gets *worse* with room
-(0.7917 at 128 tokens to 2.2318 at 1024), which is the ramble signature
-surviving a budget increase. So the 128-token ceiling should be read as
-understating ru and en, overstating nothing, and leaving ar/fa/ur as genuine
-model failures.
+cap. English moves the same way and further (0.5816 to 0.3559). So the
+128-token ceiling understates ru and en.
+
+The one movement that runs the other way is Arabic, and it is worth being
+precise about because the comparison is not clean. Zero-shot Arabic *improves*
+with room, 0.7961 at 128 tokens to 0.7357 at 1024. But `adapter_v3` at 1024
+tokens scores 2.2318, against 0.7917 for `adapter_v4` at 128 and 0.7999 for the
+pre-EOS `adapter_v2` at 128. Those last two are different adapters, so this is
+not a within-adapter budget effect and is not presented as one — there is no
+`adapter_v3` run at 128 tokens to compare against. What it does show is that
+the trained EOS adapter rambles on Arabic specifically when given room, which is
+the rample signature surviving into high budgets and is a reason not to raise
+the cap globally.
+
+So the 128-token ceiling should be read as understating ru and en, being
+neutral-to-helpful for Arabic on an untrained model, and leaving ar (trained),
+fa and ur as genuine model failures that more tokens do not fix.
 
 Neither supplementary arm changes the verdict, and neither is counted in the
 3-of-10 headline.
