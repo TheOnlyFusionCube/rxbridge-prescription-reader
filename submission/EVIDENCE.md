@@ -1224,3 +1224,139 @@ those five, not further tuning of the trainer or the decoder.
 
 Nothing in this section changes a graded number. It is the census that says
 where the next unit of work belongs.
+
+
+---
+
+## English supply: the IAM retrain, held-out at both budgets (2026-10-10)
+
+The census above identifies English as the one graded language that is not
+supply-saturated: 74 corpus rows, 82k characters, 41% of the 200k cap, against
+3,400 rows for its neighbours. It is also the language that has failed at every
+decode configuration ever measured, at 0.5200 to 0.6010, with references of a
+median 1,452 characters. This run tests whether that failure is a supply
+problem by acquiring English handwriting data and retraining on it.
+
+Corpus acquisition for the five empty languages was attempted first and each
+failed for a recorded reason: Bengali gated behind a 403, Chinese's repo 404s,
+Korean ships 5 images with polygon regions, Odia ships character-classification
+metadata with no line images, and the "multi-lingual" dataset is Hindi-only.
+The English source that did exist is the IAM handwriting corpus via a public
+5,663-pair distribution: `fresh/iam_voxel` with a `samples.json` pairing each
+`data/NNNNN.png` to a transcript. A reader (`read_iam_voxel`, commit 622565d)
+and a SOURCES entry were added so en trains from AMR plus IAM.
+
+The rebuild was guarded so it could not move the verifier. `scripts/rebuild_en.py`
+verifies the other nine languages' shards are byte-identical against a
+pre-build checksum manifest, restores en's test and val from backup, and strips
+any train row whose image also appears in the restored test or val. All three
+matters: `write_shards` would have drawn 200 test rows and 200 val rows out of
+the now-5,737-row pool, silently re-grading English against IAM line crops
+instead of the 14 paragraph-form rows every published English number was
+measured on; and the seed-0 shuffle with a 3,000-row train cap put 20 of the 21
+original held-out AMR images into the new train shard by chance. The rebuild
+reported en train 53 to 2,980 rows, test 14 and val 7 restored byte-identical
+(`aaa3cc83`, `d310a711`), zero remaining test/val images in train, and the nine
+other languages unchanged.
+
+The disclosed caveat, stated before the number: IAM rows are line and
+multi-line crops, 3 to 524 characters with a median of 86, while the en test
+shard is paragraph form with a median of 1,452. So this experiment can buy the
+model English script-reading ability. It cannot buy it paragraph structure, and
+it is not a like-for-like addition.
+
+Training mix, verbatim from the two runs' load_rows output. Every language is
+identical between them except English; the only variable in this experiment is
+English data.
+
+| language | v5 rows | v5 chars | v7 rows | v7 chars |
+|---|---|---|---|---|
+| en English | 60 | 61,780 | 1,500 | 185,550 |
+| fr French | 1,500 | 69,653 | 1,500 | 69,653 |
+| th Thai | 1,500 | 61,545 | 1,500 | 61,545 |
+| de German | 1,500 | 62,904 | 1,500 | 62,904 |
+| hi Hindi | 1,500 | 31,341 | 1,500 | 31,341 |
+| ur Urdu | 1,500 | 66,117 | 1,500 | 66,117 |
+| ar Arabic | 259 | 199,999 | 259 | 199,999 |
+| fa Persian | 194 | 199,649 | 194 | 199,649 |
+| ru Russian | 52 | 197,822 | 52 | 197,822 |
+| vi Vietnamese | 459 | 199,982 | 459 | 199,982 |
+| total | 8,524 | 1,150,792 | 9,964 | 1,274,562 |
+
+English's share of training characters went from 5.4% to 14.6%, a 2.7x raise,
+paid for proportionally by the other nine out of a fixed 200k-per-language cap.
+The average English row went from 1,030 characters to 124, which is the
+granularity mismatch expressed as a number.
+
+Held-out htr/test, 40 rows per language, adapter_v7 against adapter_v5 at the
+declared penalty arm, 128 tokens:
+
+| language | v5 | v7 | verdict |
+|---|---|---|---|
+| de German | 0.0418 | 0.0473 | **PASS** |
+| fr French | 0.0777 | 0.0953 | **PASS** |
+| th Thai | 0.1632 | 0.1852 | **PASS** |
+| vi Vietnamese | 0.1945 | 0.2093 | **PASS** |
+| hi Hindi | 0.4184 | 0.3376 | fail |
+| en English | 0.5926 | 0.6010 | fail |
+| fa Persian | 0.7751 | 0.7716 | fail |
+| ar Arabic | 0.7140 | 0.7258 | fail |
+| ur Urdu | 0.7967 | 0.8103 | fail |
+| ru Russian | 0.9111 | 0.9160 | fail |
+
+**Overall: 4 passed, mean CER 0.4699 against v5's 0.4682. Verdict FAIL.**
+Scrubbed per-row data in `eval/BENCHMARK_V7_PENAL.json`.
+
+English failed the purpose of the experiment. It did not improve at the
+primary budget, it regressed by 0.0084, and the language that was supposed to
+benefit is the one that got worse. Worse, it got worse on its own training
+data: the inline val eval -- the 7 original AMR val rows, which the model
+trained on -- scored en 0.4217 against v5's 0.4161. A model that cannot
+transcribe the seven English rows it was fitted on has not been taught English;
+it has been taught something else in the English slot.
+
+The cost is visible in the four passing languages, all of which drifted the
+wrong way by a similar margin: fr +0.0176, th +0.0220, vi +0.0148, de +0.0055.
+That is the 2.7x gradient share coming out of their budget, and it is why the
+experiment is a net negative at this budget even before English is counted.
+
+At the 1024-token budget the same run tells a more interesting story, and it is
+the reason the experiment was worth running.
+
+| language | v5 | v7 | verdict |
+|---|---|---|---|
+| de German | 0.0418 | 0.0473 | **PASS** |
+| fr French | 0.0777 | 0.0953 | **PASS** |
+| th Thai | 0.1632 | 0.1852 | **PASS** |
+| vi Vietnamese | 0.1313 | 0.1376 | **PASS** |
+| hi Hindi | 0.4184 | 0.3376 | fail |
+| en English | 0.5867 | **0.4369** | fail |
+| fa Persian | 0.7027 | 0.6372 | fail |
+| ar Arabic | 0.6168 | 0.5725 | fail |
+| ur Urdu | 0.8107 | 0.8103 | fail |
+| ru Russian | 0.8025 | 0.8102 | fail |
+
+**Overall: 4 passed, mean CER 0.4070 -- the best mean of the campaign, against
+v5's 0.4338. Verdict FAIL.** Scrubbed per-row data in
+`eval/BENCHMARK_V7_PENAL_1024.json`.
+
+English 0.5867 to 0.4369 is its best number in the campaign, and Arabic 0.5725
+and Persian 0.6372 are bests for them too. So the IAM data did teach the model
+to emit more English, and at a budget with room to emit it, that shows up. But
+0.4369 against a 0.25 bar is not a near miss, and 0.4369 is the best the model
+has ever done on this language at any setting. The candour required here is that
+even the good version of this result is 0.19 above the bar.
+
+So the supply lever for English is closed, and it is closed by the corpus
+rather than by the trainer. What English needs is paragraph-form English
+handwriting, and there are 74 rows of it in AMR and none in IAM; the public
+IAM distribution is line crops by construction. More of it buys more of the
+wrong shape, and the 128-token arm shows that shape actively costing the four
+passes.
+
+The standing is unchanged and now measured from every angle: 4 of 10 languages
+pass, best model is adapter_v5 at 0.4682 on the declared arm, verdict FAIL. The
+six failures are bound by capacity for the saturated scripts (ru, fa, ar
+saturate at 200k and did not move when they got 600k) and by reference form for
+en and hi. The 10-language goal needs corpora that do not exist on disk: five
+languages have zero rows, and English has no paragraph-form data to acquire.
