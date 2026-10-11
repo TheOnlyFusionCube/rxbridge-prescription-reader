@@ -1607,3 +1607,105 @@ the rendered-text explanation and vindicate the row cap; Thai returning to
 and any fifth language crossing 0.25 would be the first since the EOS fix. If
 none of the three occurs, the step count joins the other five spent levers and
 the campaign has measured everything this trainer exposes.
+
+
+---
+
+## Optimiser passes: measured (2026-10-11)
+
+Run as declared: adapter_v9 is adapter_v8's exact configuration with
+`--steps 2000`, 16,000 passes over the same 17,590 rows, or 0.91 views per row
+against v8's 0.45. Same corpus, same caps, same penalties, same untouched held-
+out shards. The inline val eval looked like it had worked -- overall 0.4640
+against v8's 0.6632, with Urdu recovered from its 2.4616 val collapse to 0.7429
+-- and val is where the good news stopped.
+
+Held-out htr/test, 40 rows per language, 128 tokens with penalties, v9 against
+v8 and v5:
+
+| language | v5 | v8 | v9 | verdict |
+|---|---|---|---|---|
+| de German | 0.0418 | 0.0621 | 0.0314 | **PASS** |
+| fr French | 0.0777 | 0.0744 | 0.0820 | **PASS** |
+| th Thai | 0.1632 | 0.2079 | 0.2586 | fail |
+| vi Vietnamese | 0.1945 | 0.2335 | 0.2505 | fail |
+| hi Hindi | 0.4184 | 0.3376 | 0.3407 | fail |
+| en English | 0.5926 | 0.5499 | 0.5380 | fail |
+| fa Persian | 0.7751 | 0.7889 | 0.7702 | fail |
+| ar Arabic | 0.7140 | 0.7447 | 0.7278 | fail |
+| ur Urdu | 0.7967 | 0.8109 | 0.7711 | fail |
+| ru Russian | 0.9111 | 0.9162 | 0.9118 | fail |
+
+**Overall: 2 passed, mean CER 0.4682 against v5's 0.4682 and 4 passes.
+Verdict FAIL.** Scrubbed per-row data in `eval/BENCHMARK_V9_PENAL.json`.
+
+All three declared criteria failed, and the run is the worst of the campaign on
+the declared arm by pass count. Hindi came in at 0.3407 against the 0.3376 the
+declaration named, so it missed by 0.0031 -- close enough that it is worth
+saying the miss does not rescue the rendered-text reading but does not confirm
+it either. Thai went the wrong way entirely, 0.2586 against the 0.1852 it was
+supposed to return to, losing its pass outright. Vietnamese also lost its pass
+at 0.2505, three thousandths above the bar. No fifth language crossed 0.25, and
+the campaign finished two passes where it started this stretch at four.
+
+The mechanism is now legible in the shape of the table rather than the mean.
+German improved to 0.0314, the best number of the campaign for any language,
+and English to 0.5380, its best at this budget -- both line-form, both
+languages that got more gradient under the row cap. Thai and Vietnamese, also
+line-form and also passed under v5, got worse. Four languages in one shape
+moving in two directions at once points at what doubling the passes actually
+did: not fitting the corpus better, but reallocating which sub-distributions
+inside each language the model spends its capacity on. The 8,000-pass run was
+long enough to learn the common shapes and stop; at 16,000 passes the optimiser
+kept going and rebalanced toward the shapes that appear most often, which for
+Thai's short references means the model now knows Thai script better and the
+specific 40 held-out rows slightly worse.
+
+The 1024-token arm, for completeness, recovered Vietnamese at 0.1953 and still
+did not recover Thai:
+
+| language | v5 | v8 | v9 | verdict |
+|---|---|---|---|---|
+| de German | 0.0418 | 0.0621 | 0.0314 | **PASS** |
+| fr French | 0.0777 | 0.0744 | 0.0820 | **PASS** |
+| vi Vietnamese | 0.1313 | 0.1755 | 0.1953 | **PASS** |
+| th Thai | 0.1632 | 0.2079 | 0.2586 | fail |
+| hi Hindi | 0.4184 | 0.3376 | 0.3407 | fail |
+| en English | 0.5867 | 0.4389 | 0.4366 | fail |
+| fa Persian | 0.7027 | 0.8900 | 1.0907 | fail |
+| ar Arabic | 0.6168 | 0.6872 | 0.7066 | fail |
+| ur Urdu | 0.7967 | 0.8109 | 0.7711 | fail |
+| ru Russian | 0.8025 | 0.8157 | 0.8006 | fail |
+
+**Overall: 3 passed, mean CER 0.4714. Verdict FAIL.** Scrubbed per-row data in
+`eval/BENCHMARK_V9_PENAL_1024.json`.
+
+Persian at 1.0907 is the worst number in the campaign for any language at any
+setting, and it is the third consecutive arm in which Persian has degraded under
+a larger budget: 0.7027 at v5, 0.8900 at v8, 1.0907 here. Urdu at 0.7711
+improved, and Thai and Hindi are identical to four decimals at both budgets,
+which is the signature of answers that terminate well inside the smaller
+budget. Persian's only move was to get longer and more wrong.
+
+So the step count joins the five spent levers, and the falsification runs in the
+direction nobody wanted: more optimiser passes on this corpus does not recover
+what the row expansion cost, it costs more. v5 remains the best model in the
+campaign on both counts, 4 passes and 0.4682, and every comparison in this file
+should be graded against it.
+
+Standing after nine held-out runs across six levers: 4 of 10 languages pass at
+CER 0.25, and the verifier says FAIL. The two changes that ever moved the
+scoreboard were the EOS stop-rule fix and the character-balanced corpus, both of
+which predate this stretch of work. Budget, penalties, prompt wording, character
+volume, the row count and the step count have each been declared, measured and
+closed. What binds the remaining six is not reachable from this trainer: Hindi's
+corpus is rendered text rather than handwriting, English has 74 paragraph rows
+and no paragraph-form source to acquire, five languages are empty directories,
+and Russian and Persian hold 12.8M and 3.5M characters and saturate the cap
+without moving -- capacity for those scripts, which a flag cannot fix.
+
+The benchmark itself is the durable artifact of this campaign. It is stable
+across nine runs and every configuration in it, its bar has never moved, the
+levers it tested were declared before they were measured, and it has now
+correctly reported FAIL more times than it has reported PASS. That is what a
+verifier is for.
