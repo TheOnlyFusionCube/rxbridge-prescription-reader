@@ -40,7 +40,7 @@ LANGS = ["en", "fr", "th", "ar", "de", "fa", "ru", "vi", "hi", "ur"]
 
 DEFAULT_MODEL = "LiquidAI/LFM2.5-VL-3B"
 
-LORA_TARGETS = [
+LM_TARGETS = [
     "self_attn.q_proj",
     "self_attn.k_proj",
     "self_attn.v_proj",
@@ -51,6 +51,16 @@ LORA_TARGETS = [
     "feed_forward.w2",
     "feed_forward.w3",
 ]
+
+VISION_TARGETS = [
+    "mlp.fc1",
+    "mlp.fc2",
+    "patch_embedding",
+    "multi_modal_projector.linear_1",
+    "multi_modal_projector.linear_2",
+]
+
+LORA_TARGETS = LM_TARGETS + VISION_TARGETS
 
 PASS_BAR = 0.25
 

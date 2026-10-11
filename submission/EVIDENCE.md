@@ -1709,3 +1709,68 @@ across nine runs and every configuration in it, its bar has never moved, the
 levers it tested were declared before they were measured, and it has now
 correctly reported FAIL more times than it has reported PASS. That is what a
 verifier is for.
+
+
+---
+
+## The vision read path: the lens itself was frozen (declared 2026-10-11)
+
+The previous section closes by saying what binds the remaining six is "not
+reachable from this trainer" and names capacity for scripts as the cause. That
+claim is now audited rather than asserted, and the audit found one surface it
+was wrong about.
+
+`LORA_TARGETS` in train_lora.py has always been an LM-side naming list:
+`self_attn.{q,k,v,out}_proj`, `conv.{in,out}_proj`, `feed_forward.w{1,2,3}`.
+LFM2.5-VL-3B's vision stack is a Siglip2 encoder, and Siglip2 names its
+projections differently: `mlp.fc1`/`fc2`, `embeddings.patch_embedding`, and
+`multi_modal_projector.linear_{1,2}`. PEFT matches `target_modules` by name
+suffix, so the interesting fact is not that the vision list was absent but
+*which* parts of the vision stack the LM-side names accidentally reached.
+Building the model exactly as training builds it and inspecting the result:
+
+| component | modules wrapped by LoRA |
+|---|---|
+| vision_tower.encoder.layers.*.self_attn.{q,k,v,out}_proj | 432 (all 27 layers) |
+| vision_tower.encoder.layers.*.mlp.{fc1,fc2} | **0** |
+| vision_tower.embeddings.patch_embedding | **0** |
+| multi_modal_projector.linear_{1,2} | **0** |
+
+So vision *attention* has been trained in every run of this campaign, and the
+57 modules that make up the rest of the read path have not. The most
+consequential of them is `multi_modal_projector`: it is the only thing between
+the Siglip2 encoder and the language model, which means every Cyrillic,
+Arabic, Persian and Devanagari glyph this campaign has ever tried to read was
+handed to the LM through the base model's fixed lens, and no gradient has ever
+reached that lens. "Capacity for those scripts" is the sentence the census
+used; this is the mechanism that sentence was gesturing at.
+
+Declared before any number exists: adapter_v10 is adapter_v7's exact
+configuration -- 1,000 optimiser steps x 8 accumulation, lr 2e-4, rank 16,
+alpha 32, `--per-lang-chars 200000`, save every 100, the same IAM corpus with
+en's restored verifier -- with one change, the five vision target suffixes
+added to the list. v10 against v7 therefore changes exactly one thing, the same
+standard v8 and v9 were held to. Both held-out arms are pre-declared: 128
+tokens with the `pen1.2+ngram3` penalties, and 1024 tokens with the same.
+
+What would count as a result, fixed here first so it cannot be moved after.
+The declared budget is 128 tokens with penalties. At that budget the best
+number each language has ever recorded is: en 0.5380, ru 0.9111, fa 0.7751,
+ar 0.7110, hi 0.3376, ur 0.7711, th 0.1632, vi 0.1945. Any of ru below 0.90,
+fa below 0.75, ar below 0.71, or hi below 0.30 would be the first movement
+those languages have shown to any lever. Any fifth language crossing 0.25
+would be the first new pass since the EOS fix. And th returning below 0.1852
+would undo the damage v9 did to it.
+
+The risks are named in advance too, and they are not small. This is the first
+change in the campaign that trains the vision tower's non-attention layers,
+which triples the trainable parameter count from 28.4M to 662 tensors' worth
+and adds optimizer state; the smoke test put peak VRAM at 11.09 GB against 16
+GB cards, so it fits, but the margin is thinner than any prior run. More
+seriously, the fixed lens may be fixed for a reason: the base model spent its
+pretraining aligning Siglip2 features to the LM's embedding space through that
+projector, and a rank-16 adapter started from noise may tear that alignment
+down faster than it learns anything, which would show up as the passing
+languages getting worse while the failing ones stay flat. If that happens, the
+honest reading is that the lens was already good and the capacity constraint
+lives somewhere the adapter cannot reach, not that the lens needed more steps.
