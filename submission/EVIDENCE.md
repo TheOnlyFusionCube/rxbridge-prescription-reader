@@ -1774,3 +1774,68 @@ down faster than it learns anything, which would show up as the passing
 languages getting worse while the failing ones stay flat. If that happens, the
 honest reading is that the lens was already good and the capacity constraint
 lives somewhere the adapter cannot reach, not that the lens needed more steps.
+
+
+---
+
+## The vision lens: the run died at 70%, criteria unevaluated (2026-10-11)
+
+Recorded as an incident, not a result, because there is no held-out number for
+adapter_v10 and it would be dishonest to imply otherwise.
+
+What happened, verbatim from the run's own log. Training reached
+`pass 5700/8000` -- opt step ~712 of 1000, about 71% of the way -- and then
+stopped. The last line written was `OOM on this sample; skipping`, the fourth
+such skip in 5,700 passes, a 0.07% rate. There is no traceback in the log and
+no clean-exit marker: no "saved adapter to" final line, no KeyboardInterrupt
+note. The log's last write was 13:22:17 CST and a self-match-safe `pgrep` for
+`train_lora.py` returns nothing, with no campaign process in
+`nvidia-smi --query-compute-apps`. A Python process that exits normally does
+not vanish mid-line; the signature is a host-level kill or an uncatchable CUDA
+abort, and which of the two it was is not recoverable from what is left.
+
+The declaration named this exact failure in advance rather than discovering it
+afterwards. It said the smoke test put peak VRAM at 11.09 GB against 16 GB
+cards, that this "fits, but the margin is thinner than any prior run," and that
+a thinner margin was the risk. The live run sat at 14,910 MiB of 16,311 with
+GPU 0 at 91-99% utilisation for its whole life. Prior runs peaked near 15.2 GB
+too, but none of them added 4.9M trainable parameters of vision MLP and
+projector adapters on top of the LM side, which is the difference between
+fitting and not fitting over 8,000 passes rather than in a three-pass smoke.
+The pre-declared risk was memory marginality, and the run died on it.
+
+The artifact survived, which is the part worth keeping. `save_every 100`
+overwrites the adapter in place, so `lfm/adapter_v10` holds the opt-step-700
+checkpoint (files written 13:20, five minutes before the death) at 5,600 of
+8,000 passes. Its integrity was checked directly rather than assumed: 662
+tensors, every one F32, with 326 tensors under `vision_tower` and 4 under
+`multi_modal_projector`. The lever is genuinely inside the file, so a partial
+model exists and is usable -- but usable for what is the open question, and it
+is not a substitute for the run that was declared.
+
+The declared criteria therefore stand UNEVALUATED. They are not failed, and
+nothing here should be read as evidence either way about whether the lens was
+the constraint: ru below 0.90, fa below 0.75, ar below 0.71, hi below 0.30, a
+fifth language under 0.25, or th back below 0.1852 -- none has been measured
+for v10 at any budget. The campaign's standing is unchanged from the last
+measured row: 4 of 10 languages pass, best model adapter_v5, verdict FAIL.
+
+An external constraint blocks the obvious next step. All four GPUs are held by
+a root-owned vLLM deployment -- `VLLM::EngineCore` under `/root/rollout.py`
+with four tensor-parallel workers at ~14.9 GB each -- first observed 25:43 old
+at 14:16 CST, which puts its start at approximately 13:50 CST, twenty-eight
+minutes after v10's last log write. It is not a campaign process and it did not
+cause the crash, but with every card at 14.9 of 16.3 GB there is no GPU on
+which to relaunch training or to benchmark the partial checkpoint, and that
+checkpoint is 3B parameters of bf16 weights needing roughly 7 GB plus
+activations. Nothing can be measured until a card frees, and the deployment's
+duration is not something this campaign controls or should guess at.
+
+So the honest state of the seventh lever: implemented, smoke-validated,
+declared before measuring, and lost to an infrastructure failure at 71% with a
+verifiable partial artifact and zero held-out evidence. When a GPU frees, the
+two candidate next steps are already decided and in priority order -- benchmark
+the opt-step-700 checkpoint first, because it is cheap, it already exists, and
+an early read on ru/fa/ar tells us whether the lens is worth a full rerun; then
+relaunch to completion if the early read points that way. Until then this
+section is the record of what was spent and what remains unmeasured.
